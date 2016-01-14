@@ -45,3 +45,19 @@ $RECYCLE.BIN/
 Network Trash Folder
 Temporary Items
 .apdisk
+fceuxd.txt
+fceuxdsp.exe
+*.exe
+Nestopia140bin/7zxa.dll
+*.zip
+fceu.cfg
+HighLow.nes
+Nestopia140bin/changelog.txt
+*.txt
+*.dll
+Nestopia140bin/schemaromset.xsd
+*.nlg
+Nestopia140bin/nestopia.log
+*.html
+Nestopia140bin/schemadb.xsd
+*.xml
