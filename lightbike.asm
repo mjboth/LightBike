@@ -1,5 +1,5 @@
-  .inesprg 1   ; 1x 16KB PRG code
-  .ineschr 1   ; 1x  8KB CHR data
+  .inesprg 1   ; X1 16KB PRG code
+  .ineschr 1   ; X1  8KB CHR data
   .inesmap 0   ; mapper 0 = NROM, no bank swapping
   .inesmir 1   ; background mirroring
   
@@ -10,15 +10,15 @@
   .rsset $0000  ;;start variables at ram location 0
   
 gamestate  .rs 1  ; .rs 1 means reserve one byte of space
-bikex      .rs 1  ; bike horizontal position
-bikey      .rs 1  ; bike vertical position
-bikespeedx .rs 1  ; bike horizontal speed per frame
-bikespeedy .rs 1  ; bike vertical speed per frame
+bikeX1      .rs 1  ; bike horizontal position
+bikeY1      .rs 1  ; bike vertical position
+bikeSpeedX1 .rs 1  ; bike horizontal speed per frame
+bikeSpeedY1 .rs 1  ; bike vertical speed per frame
 buttons1   .rs 1  ; player 1 gamepad buttons, one bit per button
 buttons2   .rs 1  ; player 2 gamepad buttons, one bit per button
-marked     .rs 750
-currdir1   .rs 1  ; player 1 current direction
-nextdir1   .rs 1  ; player 1 next direction
+marked     .rs 3000
+currDir1   .rs 1  ; player 1 current direction
+nextDir1   .rs 1  ; player 1 next direction
 score1     .rs 1  ; player 1 score, 0-15
 score2     .rs 1  ; player 2 score, 0-15
 
@@ -28,10 +28,10 @@ STATETITLE     = $00  ; displaying title screen
 STATEPLAYING   = $01  ; move paddles/bike, check for collisions
 STATEGAMEOVER  = $02  ; displaying game over screen
   
-RIGHTWALL      = $F0  ; when bike reaches one of these, do something
+RIGHTWALL      = $F5  ; when bike reaches one of these, do something
 TOPWALL        = $18
-BOTTOMWALL     = $D7
-LEFTWALL       = $0A
+BOTTOMWALL     = $DD
+LEFTWALL       = $07
 
 UP             = $01  ; used to represent the direction the bike is heading
 DOWN           = $02
@@ -173,19 +173,19 @@ LoadBackgroundLoop4:
 ;;;Set some initial bike stats
 Begin:
   LDA #RIGHT
-  STA currdir1
+  STA currDir1
   LDA #$00
-  STA nextdir1
+  STA nextDir1
   
   LDA #$50
-  STA bikey
+  STA bikeY1
   
   LDA #$80
-  STA bikex
+  STA bikeX1
   
   LDA #$02
-  STA bikespeedx
-  STA bikespeedy
+  STA bikeSpeedX1
+  STA bikeSpeedY1
 
 
 ;;:Set starting game state
@@ -275,82 +275,82 @@ EngineGameOver:
  
 EnginePlaying:
 
-  LDA bikex
-  AND %00000111
+  LDA bikeX1
+  AND %00000011
   BNE ChangeDirection1Done
-  LDA bikey
-  AND %00000111
+  LDA bikeY1
+  AND %00000011
   BNE ChangeDirection1Done
 
-  LDA nextdir1
+  LDA nextDir1              ;if no change was requested, skip the next part
   BEQ ChangeDirection1Done
 
 ChangeDirection1:
-  STA currdir1
+  STA currDir1
   LDA #$00
-  STA nextdir1
+  STA nextDir1
 ChangeDirection1Done:
 
 
 MoveBikeUp:
-  LDA currdir1
+  LDA currDir1
   CMP #UP
   BNE MoveBikeUpDone   ;;if bike is not moving up, skip this section
 
-  LDA bikey
+  LDA bikeY1
   SEC
-  SBC bikespeedy        ;;bikey position = bikey - bikespeedy
-  STA bikey
+  SBC bikeSpeedY1        ;;bikeY1 position = bikeY1 - bikeSpeedY1
+  STA bikeY1
 
-  LDA bikey
+  LDA bikeY1
   CMP #TOPWALL
   BCC Crash      ;;if bike y > top wall, still on screen, skip next section
   JMP MoveDone
 MoveBikeUpDone:
 
 MoveBikeDown:
-  LDA currdir1
+  LDA currDir1
   CMP #DOWN
   BNE MoveBikeDownDone   ;;if bike is not moving down, skip this section
 
-  LDA bikey
+  LDA bikeY1
   CLC
-  ADC bikespeedy        ;;bikey position = bikey + bikespeedy
-  STA bikey
+  ADC bikeSpeedY1        ;;bikeY1 position = bikeY1 + bikeSpeedY1
+  STA bikeY1
 
-  LDA bikey
+  LDA bikeY1
   CMP #BOTTOMWALL
   BCS Crash      ;;if bike y < bottom wall, still on screen, skip next section
   JMP MoveDone
 MoveBikeDownDone:
 
 MoveBikeLeft:
-  LDA currdir1
+  LDA currDir1
   CMP #LEFT
   BNE MoveBikeLeftDone   ;;if bike is not moving left, skip this section
 
-  LDA bikex
+  LDA bikeX1
   SEC
-  SBC bikespeedx        ;;bikex position = bikex - bikespeedx
-  STA bikex
+  SBC bikeSpeedX1        ;;bikeX1 position = bikeX1 - bikeSpeedX1
+  STA bikeX1
 
-  LDA bikex
+  LDA bikeX1
   CMP #LEFTWALL
   BCC Crash      ;;if bike x > left wall, still on screen, skip next section
   JMP MoveDone
 MoveBikeLeftDone:
 
 MoveBikeRight:
-  LDA currdir1
+  LDA currDir1
   CMP #RIGHT
   BNE MoveBikeRightDone   ;;if bike is not moving right, skip this section
 
-  LDA bikex
+  LDA bikeX1
   CLC
-  ADC bikespeedx        ;;bikex position = bikex + bikespeedx
-  STA bikex
+  ADC bikeSpeedX1        ;;bikeX1 position = bikeX1 + bikeSpeedX1
+  STA bikeX1
 
-  LDA bikex
+  LDA bikeX1
   CMP #RIGHTWALL
   BCS Crash      ;;if bike x < right wall, still on screen, skip next section
 MoveBikeRightDone:
@@ -360,22 +360,22 @@ MoveDone:
   JMP CrashDone
 Crash:
   LDA #RIGHT
-  STA currdir1
+  STA currDir1
   LDA #$00
-  STA nextdir1
+  STA nextDir1
   
   LDA #$50
-  STA bikey
+  STA bikeY1
   
   LDA #$80
-  STA bikex
+  STA bikeX1
 CrashDone:
   JMP GameEngineDone
  
 
 
 UpdateSprites:
-  LDA bikey  ;;update all bike sprite info
+  LDA bikeY1  ;;update all bike sprite info
   STA $0200
   
 ;  LDA #$40
@@ -384,7 +384,7 @@ UpdateSprites:
 ;  LDA #$00
 ;  STA $0202
   
-  LDA bikex
+  LDA bikeX1
   STA $0203
   
   ;;update paddle sprites
@@ -416,12 +416,12 @@ ReadUp:
   BEQ ReadUpDone   ; branch to ReadUpDone if button is NOT pressed (0)
                   ; add instructions here to do something when button IS pressed (1)
 
-  LDA currdir1
+  LDA currDir1
   CMP #DOWN
   BEQ ReadUpDone  ;  ignore if moving down, bike cannot make 180 degree turn
 
   LDA #UP
-  STA nextdir1  
+  STA nextDir1  
 ReadUpDone:        ; handling this button is done
 
 ReadDown:
@@ -430,12 +430,12 @@ ReadDown:
   BEQ ReadDownDone   ; branch to ReadDownDone if button is NOT pressed (0)
                   ; add instructions here to do something when button IS pressed (1)
 
-  LDA currdir1
+  LDA currDir1
   CMP #UP
   BEQ ReadDownDone  ;  ignore if moving up, bike cannot make 180 degree turn
 
   LDA #DOWN
-  STA nextdir1  
+  STA nextDir1  
 ReadDownDone:        ; handling this button is done
 
 ReadLeft:
@@ -444,12 +444,12 @@ ReadLeft:
   BEQ ReadLeftDone   ; branch to ReadLeftDone if button is NOT pressed (0)
                   ; add instructions here to do something when button IS pressed (1)
 
-  LDA currdir1
+  LDA currDir1
   CMP #RIGHT
   BEQ ReadLeftDone  ;  ignore if moving right, bike cannot make 180 degree turn
 
   LDA #LEFT
-  STA nextdir1  
+  STA nextDir1  
 ReadLeftDone:        ; handling this button is done
   
 ReadRight: 
@@ -458,12 +458,12 @@ ReadRight:
   BEQ ReadRightDone   ; branch to ReadRightDone if button is NOT pressed (0)
                   ; add instructions here to do something when button IS pressed (1)
 
-  LDA currdir1
+  LDA currDir1
   CMP #LEFT
   BEQ ReadRightDone  ;  ignore if moving right, bike cannot make 180 degree turn
 
   LDA #RIGHT
-  STA nextdir1  
+  STA nextDir1  
 ReadRightDone:        ; handling this button is done
 ;  LDA $4016
 ;  LSR A            ; bit0 -> Carry
@@ -496,12 +496,12 @@ ReadRightDone:        ; handling this button is done
   .bank 1
   .org $E000
 palette:
-  .db $0F,$06,$12,$31,  $0F,$06,$12,$31,  $0F,$06,$12,$31,  $0F,$06,$12,$31   ;;background palette
+  .db $0F,$00,$12,$00,  $0F,$00,$12,$00,  $0F,$00,$12,$00,  $0F,$00,$12,$00   ;;background palette
   .db $0F,$02,$38,$3C,  $0F,$02,$38,$3C,  $0F,$02,$38,$3C,  $0F,$02,$38,$3C   ;;sprite palette
 
 sprites:
      ;vert tile attr horiz
-  .db $80, $03, $00, $80   ;sprite 0
+  .db $80, $28, $00, $80   ;sprite 0
 
 
 background1:
@@ -514,90 +514,90 @@ background1:
   .db $25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25  ;;row 3
   .db $25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25  ;;TopWall
 
-  .db $25,$2D,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C  ;;row 4
-  .db $2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$2C,$25  ;;Grid
-
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 5
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 4
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 6
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 5
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 7
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 6
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 8
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 7
+  .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
+
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 8
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A      ;;Grid 
 background2:
   .db $25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 9
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 9
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 10
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 10
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 11
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 11
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 12
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 12
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 13
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 13
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 14
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 14
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 15
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 15
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 16
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 16
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A          ;;Grid
 
 background3:
   .db $2A,$25  ;;all sky
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 17
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 17
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 18
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 18
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 19
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 19
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 20
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 20
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 21
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 21
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 22
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 22
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 23
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 23
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 24
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 24
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 25
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 25
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
 background4:
   .db $2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 26
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 26
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 27
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 27
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 28
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 28
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2B,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 29
+  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 29
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
   .db $25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25  ;;row 30
