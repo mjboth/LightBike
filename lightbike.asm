@@ -12,16 +12,13 @@
 gamestate  .rs 1  ; .rs 1 means reserve one byte of space
 bikex      .rs 1  ; bike horizontal position
 bikey      .rs 1  ; bike vertical position
-bikeup     .rs 1  ; 1 = bike moving up
-bikedown   .rs 1  ; 1 = bike moving down
-bikeleft   .rs 1  ; 1 = bike moving left
-bikeright  .rs 1  ; 1 = bike moving right
 bikespeedx .rs 1  ; bike horizontal speed per frame
 bikespeedy .rs 1  ; bike vertical speed per frame
 buttons1   .rs 1  ; player 1 gamepad buttons, one bit per button
 buttons2   .rs 1  ; player 2 gamepad buttons, one bit per button
 marked     .rs 750
-nextturn1  .rs 1
+currdir1   .rs 1  ; player 1 current direction
+nextdir1   .rs 1  ; player 1 next direction
 score1     .rs 1  ; player 1 score, 0-15
 score2     .rs 1  ; player 2 score, 0-15
 
@@ -35,7 +32,11 @@ RIGHTWALL      = $F0  ; when bike reaches one of these, do something
 TOPWALL        = $18
 BOTTOMWALL     = $D7
 LEFTWALL       = $0A
-  
+
+UP             = $01  ; used to represent the direction the bike is heading
+DOWN           = $02
+LEFT           = $03
+RIGHT          = $04  
 
 ;;;;;;;;;;;;;;;;;;
 
@@ -109,7 +110,7 @@ LoadSpritesLoop:
                         ; if compare was equal to 16, keep going down
               
               
-              
+;;TO-DO: CLEAN THIS UP              
 LoadBackground:
   LDA $2002             ; read PPU status to reset the high/low latch
   LDA #$20
@@ -171,12 +172,10 @@ LoadBackgroundLoop4:
 
 ;;;Set some initial bike stats
 Begin:
-  LDA #$01
-  STA bikeright
+  LDA #RIGHT
+  STA currdir1
   LDA #$00
-  STA bikeup
-  STA bikedown
-  STA bikeleft
+  STA nextdir1
   
   LDA #$50
   STA bikey
@@ -225,8 +224,10 @@ NMI:
     
   ;;;all graphics updates done by here, run game engine
 
+ReadControllers:
   JSR ReadController1  ;;get the current button data for player 1
 ; JSR ReadController2  ;;get the current button data for player 2
+ReadControllersDone:
   
 GameEngine:  
   LDA gamestate
@@ -274,9 +275,75 @@ EngineGameOver:
  
 EnginePlaying:
 
+  LDA bikex
+  AND %00000111
+  BNE ChangeDirection1Done
+  LDA bikey
+  AND %00000111
+  BNE ChangeDirection1Done
+
+  LDA nextdir1
+  BEQ ChangeDirection1Done
+
+ChangeDirection1:
+  STA currdir1
+  LDA #$00
+  STA nextdir1
+ChangeDirection1Done:
+
+
+MoveBikeUp:
+  LDA currdir1
+  CMP #UP
+  BNE MoveBikeUpDone   ;;if bike is not moving up, skip this section
+
+  LDA bikey
+  SEC
+  SBC bikespeedy        ;;bikey position = bikey - bikespeedy
+  STA bikey
+
+  LDA bikey
+  CMP #TOPWALL
+  BCC Crash      ;;if bike y > top wall, still on screen, skip next section
+  JMP MoveDone
+MoveBikeUpDone:
+
+MoveBikeDown:
+  LDA currdir1
+  CMP #DOWN
+  BNE MoveBikeDownDone   ;;if bike is not moving down, skip this section
+
+  LDA bikey
+  CLC
+  ADC bikespeedy        ;;bikey position = bikey + bikespeedy
+  STA bikey
+
+  LDA bikey
+  CMP #BOTTOMWALL
+  BCS Crash      ;;if bike y < bottom wall, still on screen, skip next section
+  JMP MoveDone
+MoveBikeDownDone:
+
+MoveBikeLeft:
+  LDA currdir1
+  CMP #LEFT
+  BNE MoveBikeLeftDone   ;;if bike is not moving left, skip this section
+
+  LDA bikex
+  SEC
+  SBC bikespeedx        ;;bikex position = bikex - bikespeedx
+  STA bikex
+
+  LDA bikex
+  CMP #LEFTWALL
+  BCC Crash      ;;if bike x > left wall, still on screen, skip next section
+  JMP MoveDone
+MoveBikeLeftDone:
+
 MoveBikeRight:
-  LDA bikeright
-  BEQ MoveBikeRightDone   ;;if bikeright=0, skip this section
+  LDA currdir1
+  CMP #RIGHT
+  BNE MoveBikeRightDone   ;;if bike is not moving right, skip this section
 
   LDA bikex
   CLC
@@ -288,59 +355,14 @@ MoveBikeRight:
   BCS Crash      ;;if bike x < right wall, still on screen, skip next section
 MoveBikeRightDone:
 
-
-MoveBikeLeft:
-  LDA bikeleft
-  BEQ MoveBikeLeftDone   ;;if bikeleft=0, skip this section
-
-  LDA bikex
-  SEC
-  SBC bikespeedx        ;;bikex position = bikex - bikespeedx
-  STA bikex
-
-  LDA bikex
-  CMP #LEFTWALL
-  BCC Crash      ;;if bike x > left wall, still on screen, skip next section
-MoveBikeLeftDone:
-
-
-MoveBikeUp:
-  LDA bikeup
-  BEQ MoveBikeUpDone   ;;if bikeup=0, skip this section
-
-  LDA bikey
-  SEC
-  SBC bikespeedy        ;;bikey position = bikey - bikespeedy
-  STA bikey
-
-  LDA bikey
-  CMP #TOPWALL
-  BCC Crash      ;;if bike y > top wall, still on screen, skip next section
-MoveBikeUpDone:
-
-
-MoveBikeDown:
-  LDA bikedown
-  BEQ MoveBikeDownDone   ;;if bikeup=0, skip this section
-
-  LDA bikey
-  CLC
-  ADC bikespeedy        ;;bikey position = bikey + bikespeedy
-  STA bikey
-
-  LDA bikey
-  CMP #BOTTOMWALL
-  BCS Crash      ;;if bike y < bottom wall, still on screen, skip next section
-MoveBikeDownDone:
+MoveDone:
 
   JMP CrashDone
 Crash:
-  LDA #$01
-  STA bikeright
+  LDA #RIGHT
+  STA currdir1
   LDA #$00
-  STA bikeup
-  STA bikedown
-  STA bikeleft
+  STA nextdir1
   
   LDA #$50
   STA bikey
@@ -368,26 +390,6 @@ UpdateSprites:
   ;;update paddle sprites
   RTS
 
-DoOver:
-  LDA #$01
-  STA bikeright
-  LDA #$00
-  STA bikeup
-  STA bikedown
-  STA bikeleft
-  
-  LDA #$50
-  STA bikey
-  
-  LDA #$80
-  STA bikex
-  
-  LDA #$02
-  STA bikespeedx
-  STA bikespeedy
-
-  JMP Forever
-
 DrawScore:
   ;;draw score on screen using background tiles
   ;;or using many sprites
@@ -401,7 +403,7 @@ ReadController1:
   LDA #$00
   STA $4016
 ;  LDX #$08
-ReadController1Loop:
+; ReadController1Loop:
 
   LDA $4016
   LDA $4016
@@ -409,75 +411,59 @@ ReadController1Loop:
   LDA $4016
 
 ReadUp:
-  LDA $4016       ; player 1 - A
+  LDA $4016       ; player 1 - D-Pad Up
   AND #%00000001  ; only look at bit 0
   BEQ ReadUpDone   ; branch to ReadUpDone if button is NOT pressed (0)
                   ; add instructions here to do something when button IS pressed (1)
 
-;  LDA bikey
-;  CMP #TOPWALL
-;  BCC ReadUpDone      ;;if bike y > top wall, still on screen, skip next section
+  LDA currdir1
+  CMP #DOWN
+  BEQ ReadUpDone  ;  ignore if moving down, bike cannot make 180 degree turn
 
-  LDA #$01
-  STA bikeup
-  LDA #$00
-  STA bikedown
-  STA bikeleft
-  STA bikeright       
+  LDA #UP
+  STA nextdir1  
 ReadUpDone:        ; handling this button is done
 
 ReadDown:
-  LDA $4016       ; player 1 - A
+  LDA $4016       ; player 1 - D-Pad Down
   AND #%00000001  ; only look at bit 0
   BEQ ReadDownDone   ; branch to ReadDownDone if button is NOT pressed (0)
                   ; add instructions here to do something when button IS pressed (1)
 
-;  LDA bikey
-;  CMP #BOTTOMWALL
-;  BCS ReadDownDone      ;;if bike y < bottom wall, still on screen, skip next section
+  LDA currdir1
+  CMP #UP
+  BEQ ReadDownDone  ;  ignore if moving up, bike cannot make 180 degree turn
 
-  LDA #$01
-  STA bikedown
-  LDA #$00
-  STA bikeup
-  STA bikeleft
-  STA bikeright   
+  LDA #DOWN
+  STA nextdir1  
 ReadDownDone:        ; handling this button is done
 
 ReadLeft:
-  LDA $4016       ; player 1 - A
+  LDA $4016       ; player 1 - D-Pad Left
   AND #%00000001  ; only look at bit 0
-  BEQ ReadLeftDone   ; branch to ReadADone if button is NOT pressed (0)
+  BEQ ReadLeftDone   ; branch to ReadLeftDone if button is NOT pressed (0)
                   ; add instructions here to do something when button IS pressed (1)
 
-;  LDA bikex
-;  CMP #LEFTWALL
-;  BCC ReadLeftDone      ;;if bike x > left wall, still on screen, skip next section
+  LDA currdir1
+  CMP #RIGHT
+  BEQ ReadLeftDone  ;  ignore if moving right, bike cannot make 180 degree turn
 
-  LDA #$01
-  STA bikeleft
-  LDA #$00
-  STA bikeup
-  STA bikedown
-  STA bikeright  
+  LDA #LEFT
+  STA nextdir1  
 ReadLeftDone:        ; handling this button is done
   
 ReadRight: 
-  LDA $4016       ; player 1 - B
+  LDA $4016       ; player 1 - D-Pad Right
   AND #%00000001  ; only look at bit 0
-  BEQ ReadRightDone   ; branch to ReadBDone if button is NOT pressed (0)
+  BEQ ReadRightDone   ; branch to ReadRightDone if button is NOT pressed (0)
                   ; add instructions here to do something when button IS pressed (1)
 
-;  LDA bikex 
-;  CMP #RIGHTWALL
-;  BCS ReadRightDone      ;;if bike x > left wall, still on screen, skip next section
+  LDA currdir1
+  CMP #LEFT
+  BEQ ReadRightDone  ;  ignore if moving right, bike cannot make 180 degree turn
 
-  LDA #$01
-  STA bikeright
-  LDA #$00
-  STA bikeup
-  STA bikedown
-  STA bikeleft
+  LDA #RIGHT
+  STA nextdir1  
 ReadRightDone:        ; handling this button is done
 ;  LDA $4016
 ;  LSR A            ; bit0 -> Carry
