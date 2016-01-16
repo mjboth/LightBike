@@ -16,7 +16,7 @@ bikeSpeedX1 .rs 1  ; bike horizontal speed per frame
 bikeSpeedY1 .rs 1  ; bike vertical speed per frame
 buttons1   .rs 1  ; player 1 gamepad buttons, one bit per button
 buttons2   .rs 1  ; player 2 gamepad buttons, one bit per button
-marked     .rs 3000
+marked     .rs 750
 currDir1   .rs 1  ; player 1 current direction
 nextDir1   .rs 1  ; player 1 next direction
 score1     .rs 1  ; player 1 score, 0-15
@@ -496,7 +496,7 @@ ReadRightDone:        ; handling this button is done
   .bank 1
   .org $E000
 palette:
-  .db $0F,$00,$12,$00,  $0F,$00,$12,$00,  $0F,$00,$12,$00,  $0F,$00,$12,$00   ;;background palette
+  .db $0F,$00,$12,$16,  $0F,$00,$12,$16,  $0F,$00,$12,$16,  $0F,$00,$12,$16   ;;background palette
   .db $0F,$02,$38,$3C,  $0F,$02,$38,$3C,  $0F,$02,$38,$3C,  $0F,$02,$38,$3C   ;;sprite palette
 
 sprites:
