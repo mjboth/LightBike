@@ -9,18 +9,19 @@
 ;; DECLARE SOME VARIABLES HERE
   .rsset $0000  ;;start variables at ram location 0
   
-gamestate  .rs 1  ; .rs 1 means reserve one byte of space
-bikeX1      .rs 1  ; bike horizontal position
-bikeY1      .rs 1  ; bike vertical position
-bikeSpeedX1 .rs 1  ; bike horizontal speed per frame
-bikeSpeedY1 .rs 1  ; bike vertical speed per frame
-buttons1   .rs 1  ; player 1 gamepad buttons, one bit per button
-buttons2   .rs 1  ; player 2 gamepad buttons, one bit per button
-marked     .rs 750
-currDir1   .rs 1  ; player 1 current direction
-nextDir1   .rs 1  ; player 1 next direction
-score1     .rs 1  ; player 1 score, 0-15
-score2     .rs 1  ; player 2 score, 0-15
+gamestate   .rs 1    ; .rs 1 means reserve one byte of space
+bikeX1      .rs 1    ; bike horizontal position
+bikeY1      .rs 1    ; bike vertical position
+bikeSpeedX1 .rs 1    ; bike horizontal speed per frame
+bikeSpeedY1 .rs 1    ; bike vertical speed per frame
+buttons1    .rs 1    ; player 1 gamepad buttons, one bit per button
+buttons2    .rs 1    ; player 2 gamepad buttons, one bit per button
+marked      .rs 750  ; will represent the 25x30 tiles that make up the grid, each tile holds 4 squares
+currDir1    .rs 1    ; player 1 current direction
+nextDir1    .rs 1    ; player 1 next direction
+heldDir1    .rs 1    ; keep player 1 going in the same direction if the button is held
+score1      .rs 1    ; player 1 score, 0-15
+score2      .rs 1    ; player 2 score, 0-15
 
 
 ;; DECLARE SOME CONSTANTS HERE
@@ -46,18 +47,18 @@ RIGHT          = $04
   .bank 0
   .org $C000 
 RESET:
-  SEI          ; disable IRQs
-  CLD          ; disable decimal mode
+  SEI                     ; disable IRQs
+  CLD                     ; disable decimal mode
   LDX #$40
-  STX $4017    ; disable APU frame IRQ
+  STX $4017               ; disable APU frame IRQ
   LDX #$FF
-  TXS          ; Set up stack
-  INX          ; now X = 0
-  STX $2000    ; disable NMI
-  STX $2001    ; disable rendering
-  STX $4010    ; disable DMC IRQs
+  TXS                     ; Set up stack
+  INX                     ; now X = 0
+  STX $2000               ; disable NMI
+  STX $2001               ; disable rendering
+  STX $4010               ; disable DMC IRQs
 
-vblankwait1:       ; First wait for vblank to make sure PPU is ready
+vblankwait1:              ; First wait for vblank to make sure PPU is ready
   BIT $2002
   BPL vblankwait1
 
@@ -75,98 +76,98 @@ clrmem:
   INX
   BNE clrmem
    
-vblankwait2:      ; Second wait for vblank, PPU is ready after this
+vblankwait2:               ; Second wait for vblank, PPU is ready after this
   BIT $2002
   BPL vblankwait2
 
 
 LoadPalettes:
-  LDA $2002             ; read PPU status to reset the high/low latch
+  LDA $2002                ; read PPU status to reset the high/low latch
   LDA #$3F
-  STA $2006             ; write the high byte of $3F00 address
+  STA $2006                ; write the high byte of $3F00 address
   LDA #$00
-  STA $2006             ; write the low byte of $3F00 address
-  LDX #$00              ; start out at 0
+  STA $2006                ; write the low byte of $3F00 address
+  LDX #$00                 ; start out at 0
 LoadPalettesLoop:
-  LDA palette, x        ; load data from address (palette + the value in x)
-                          ; 1st time through loop it will load palette+0
-                          ; 2nd time through loop it will load palette+1
-                          ; 3rd time through loop it will load palette+2
-                          ; etc
-  STA $2007             ; write to PPU
-  INX                   ; X = X + 1
-  CPX #$20              ; Compare X to hex $10, decimal 16 - copying 16 bytes = 4 sprites
-  BNE LoadPalettesLoop  ; Branch to LoadPalettesLoop if compare was Not Equal to zero
-                        ; if compare was equal to 32, keep going down
+  LDA palette, x           ; load data from address (palette + the value in x)
+                           ; 1st time through loop it will load palette+0
+                           ; 2nd time through loop it will load palette+1
+                           ; 3rd time through loop it will load palette+2
+                           ; etc
+  STA $2007                ; write to PPU
+  INX                      ; X = X + 1
+  CPX #$20                 ; Compare X to hex $10, decimal 16 - copying 16 bytes = 4 sprites
+  BNE LoadPalettesLoop     ; Branch to LoadPalettesLoop if compare was Not Equal to zero
+                           ; if compare was equal to 32, keep going down
 
 LoadSprites:
-  LDX #$00              ; start at 0
+  LDX #$00                 ; start at 0
 LoadSpritesLoop:
-  LDA sprites, x        ; load data from address (sprites +  x)
-  STA $0200, x          ; store into RAM address ($0200 + x)
-  INX                   ; X = X + 1
-  CPX #$04              ; Compare X to hex $10, decimal 16
-  BNE LoadSpritesLoop   ; Branch to LoadSpritesLoop if compare was Not Equal to zero
-                        ; if compare was equal to 16, keep going down
+  LDA sprites, x           ; load data from address (sprites +  x)
+  STA $0200, x             ; store into RAM address ($0200 + x)
+  INX                      ; X = X + 1
+  CPX #$04                 ; Compare X to hex $10, decimal 16
+  BNE LoadSpritesLoop      ; Branch to LoadSpritesLoop if compare was Not Equal to zero
+                           ; if compare was equal to 16, keep going down
               
               
 ;;TO-DO: CLEAN THIS UP              
 LoadBackground:
-  LDA $2002             ; read PPU status to reset the high/low latch
+  LDA $2002                ; read PPU status to reset the high/low latch
   LDA #$20
-  STA $2006             ; write the high byte of $2000 address
+  STA $2006                ; write the high byte of $2000 address
   LDA #$00
-  STA $2006             ; write the low byte of $2000 address
-  LDX #$00              ; start out at 0
+  STA $2006                ; write the low byte of $2000 address
+  LDX #$00                 ; start out at 0
 LoadBackgroundLoop1:
-  LDA background1, x     ; load data from address (background + the value in x)
-  STA $2007             ; write to PPU
-  INX                   ; X = X + 1
-  CPX #$FF              ; Compare X to hex $80, decimal 128 - copying 128 bytes
+  LDA background1, x       ; load data from address (background + the value in x)
+  STA $2007                ; write to PPU
+  INX                      ; X = X + 1
+  CPX #$FF                 ; Compare X to hex $80, decimal 128 - copying 128 bytes
   BNE LoadBackgroundLoop1  ; Branch to LoadBackgroundLoop if compare was Not Equal to zero
-                        ; if compare was equal to 128, keep going down
+                           ; if compare was equal to 128, keep going down
 
   LDX #$00
 LoadBackgroundLoop2:
-  LDA background2, x     ; load data from address (background + the value in x)
-  STA $2007             ; write to PPU
-  INX                   ; X = X + 1
-  CPX #$FF              ; Compare X to hex $80, decimal 128 - copying 128 bytes
+  LDA background2, x       ; load data from address (background + the value in x)
+  STA $2007                ; write to PPU
+  INX                      ; X = X + 1
+  CPX #$FF                 ; Compare X to hex $80, decimal 128 - copying 128 bytes
   BNE LoadBackgroundLoop2  ; Branch to LoadBackgroundLoop if compare was Not Equal to zero
-                        ; if compare was equal to 128, keep going down
+                           ; if compare was equal to 128, keep going down
 
   LDX #$00
 LoadBackgroundLoop3:
-  LDA background3, x     ; load data from address (background + the value in x)
-  STA $2007             ; write to PPU
-  INX                   ; X = X + 1
-  CPX #$FF              ; Compare X to hex $80, decimal 128 - copying 128 bytes
+  LDA background3, x       ; load data from address (background + the value in x)
+  STA $2007                ; write to PPU
+  INX                      ; X = X + 1
+  CPX #$FF                 ; Compare X to hex $80, decimal 128 - copying 128 bytes
   BNE LoadBackgroundLoop3  ; Branch to LoadBackgroundLoop if compare was Not Equal to zero
-                        ; if compare was equal to 128, keep going down
+                           ; if compare was equal to 128, keep going down
 
   LDX #$00
 LoadBackgroundLoop4:
-  LDA background4, x     ; load data from address (background + the value in x)
-  STA $2007             ; write to PPU
-  INX                   ; X = X + 1
-  CPX #$C3              ; Compare X to hex $80, decimal 128 - copying 128 bytes
+  LDA background4, x       ; load data from address (background + the value in x)
+  STA $2007                ; write to PPU
+  INX                      ; X = X + 1
+  CPX #$C3                 ; Compare X to hex $80, decimal 128 - copying 128 bytes
   BNE LoadBackgroundLoop4  ; Branch to LoadBackgroundLoop if compare was Not Equal to zero
-                        ; if compare was equal to 128, keep going down              
+                           ; if compare was equal to 128, keep going down              
               
 ;LoadAttribute:
-;  LDA $2002             ; read PPU status to reset the high/low latch
+;  LDA $2002               ; read PPU status to reset the high/low latch
 ;  LDA #$23
-;  STA $2006             ; write the high byte of $23C0 address
+;  STA $2006               ; write the high byte of $23C0 address
 ;  LDA #$C0
-;  STA $2006             ; write the low byte of $23C0 address
-;  LDX #$00              ; start out at 0
+;  STA $2006               ; write the low byte of $23C0 address
+;  LDX #$00                ; start out at 0
 ;LoadAttributeLoop:
-;  LDA attribute, x      ; load data from address (attribute + the value in x)
-;  STA $2007             ; write to PPU
-;  INX                   ; X = X + 1
-;  CPX #$08              ; Compare X to hex $08, decimal 8 - copying 8 bytes
-;  BNE LoadAttributeLoop  ; Branch to LoadAttributeLoop if compare was Not Equal to zero
-                        ; if compare was equal to 128, keep going down
+;  LDA attribute, x        ; load data from address (attribute + the value in x)
+;  STA $2007               ; write to PPU
+;  INX                     ; X = X + 1
+;  CPX #$08                ; Compare X to hex $08, decimal 8 - copying 8 bytes
+;  BNE LoadAttributeLoop   ; Branch to LoadAttributeLoop if compare was Not Equal to zero
+                           ; if compare was equal to 128, keep going down
   
 
 
@@ -176,6 +177,7 @@ Begin:
   STA currDir1
   LDA #$00
   STA nextDir1
+  STA heldDir1
   
   LDA #$50
   STA bikeY1
@@ -194,31 +196,31 @@ Begin:
 
 
               
-  LDA #%10010000   ; enable NMI, sprites from Pattern Table 0, background from Pattern Table 1
+  LDA #%10010000       ; enable NMI, sprites from Pattern Table 0, background from Pattern Table 1
   STA $2000
 
-  LDA #%00011110   ; enable sprites, enable background, no clipping on left side
+  LDA #%00011110       ; enable sprites, enable background, no clipping on left side
   STA $2001
 
 Forever:
-  JMP Forever     ;jump back to Forever, infinite loop, waiting for NMI
+  JMP Forever          ; jump back to Forever, infinite loop, waiting for NMI
   
  
 
 NMI:
   LDA #$00
-  STA $2003       ; set the low byte (00) of the RAM address
+  STA $2003            ; set the low byte (00) of the RAM address
   LDA #$02
-  STA $4014       ; set the high byte (02) of the RAM address, start the transfer
+  STA $4014            ; set the high byte (02) of the RAM address, start the transfer
 
   JSR DrawScore
 
   ;;This is the PPU clean up section, so rendering the next frame starts properly.
-  LDA #%10010000   ; enable NMI, sprites from Pattern Table 0, background from Pattern Table 1
+  LDA #%10010000       ; enable NMI, sprites from Pattern Table 0, background from Pattern Table 1
   STA $2000
-  LDA #%0011110   ; enable sprites, enable background, no clipping on left side
+  LDA #%0011110        ; enable sprites, enable background, no clipping on left side
   STA $2001
-  LDA #$00        ;;tell the ppu there is no background scrolling
+  LDA #$00             ;;tell the ppu there is no background scrolling
   STA $2005
   STA $2005
     
@@ -232,20 +234,20 @@ ReadControllersDone:
 GameEngine:  
   LDA gamestate
   CMP #STATETITLE
-  BEQ EngineTitle    ;;game is displaying title screen
+  BEQ EngineTitle      ;;game is displaying title screen
     
   LDA gamestate
   CMP #STATEGAMEOVER
-  BEQ EngineGameOver  ;;game is displaying ending screen
+  BEQ EngineGameOver   ;;game is displaying ending screen
   
   LDA gamestate
   CMP #STATEPLAYING
-  BEQ EnginePlaying   ;;game is playing
+  BEQ EnginePlaying    ;;game is playing
 GameEngineDone:  
   
-  JSR UpdateSprites  ;;set bike/paddle sprites from positions
+  JSR UpdateSprites    ;;set bike/paddle sprites from positions
 
-  RTI             ; return from interrupt
+  RTI                  ; return from interrupt
  
  
  
@@ -282,7 +284,7 @@ EnginePlaying:
   AND %00000011
   BNE ChangeDirection1Done
 
-  LDA nextDir1              ;if no change was requested, skip the next part
+  LDA nextDir1           ; if no change was requested, skip the next part
   BEQ ChangeDirection1Done
 
 ChangeDirection1:
@@ -295,7 +297,7 @@ ChangeDirection1Done:
 MoveBikeUp:
   LDA currDir1
   CMP #UP
-  BNE MoveBikeUpDone   ;;if bike is not moving up, skip this section
+  BNE MoveBikeUpDone     ;;if bike is not moving up, skip this section
 
   LDA bikeY1
   SEC
@@ -304,7 +306,7 @@ MoveBikeUp:
 
   LDA bikeY1
   CMP #TOPWALL
-  BCC Crash      ;;if bike y > top wall, still on screen, skip next section
+  BCC Crash              ;;if bike y > top wall, still on screen, skip next section
   JMP MoveDone
 MoveBikeUpDone:
 
@@ -320,7 +322,7 @@ MoveBikeDown:
 
   LDA bikeY1
   CMP #BOTTOMWALL
-  BCS Crash      ;;if bike y < bottom wall, still on screen, skip next section
+  BCS Crash              ;;if bike y < bottom wall, still on screen, skip next section
   JMP MoveDone
 MoveBikeDownDone:
 
@@ -336,14 +338,14 @@ MoveBikeLeft:
 
   LDA bikeX1
   CMP #LEFTWALL
-  BCC Crash      ;;if bike x > left wall, still on screen, skip next section
+  BCC Crash              ;;if bike x > left wall, still on screen, skip next section
   JMP MoveDone
 MoveBikeLeftDone:
 
 MoveBikeRight:
   LDA currDir1
   CMP #RIGHT
-  BNE MoveBikeRightDone   ;;if bike is not moving right, skip this section
+  BNE MoveBikeRightDone  ;;if bike is not moving right, skip this section
 
   LDA bikeX1
   CLC
@@ -352,7 +354,7 @@ MoveBikeRight:
 
   LDA bikeX1
   CMP #RIGHTWALL
-  BCS Crash      ;;if bike x < right wall, still on screen, skip next section
+  BCS Crash              ;;if bike x < right wall, still on screen, skip next section
 MoveBikeRightDone:
 
 MoveDone:
@@ -375,7 +377,7 @@ CrashDone:
 
 
 UpdateSprites:
-  LDA bikeY1  ;;update all bike sprite info
+  LDA bikeY1             ;;update all bike sprite info
   STA $0200
   
 ;  LDA #$40
@@ -402,75 +404,73 @@ ReadController1:
   STA $4016
   LDA #$00
   STA $4016
-;  LDX #$08
-; ReadController1Loop:
-
-  LDA $4016
-  LDA $4016
-  LDA $4016
-  LDA $4016
+  LDX #$08
+ReadController1Loop:  ; stores the input from controller1 in a variable so it can be read multiple times
+  LDA $4016        
+  LSR A               ; bit0 -> Carry
+  ROL buttons1        ; bit0 <- Carry
+  DEX
+  BNE ReadController1Loop
 
 ReadUp:
-  LDA $4016       ; player 1 - D-Pad Up
-  AND #%00000001  ; only look at bit 0
-  BEQ ReadUpDone   ; branch to ReadUpDone if button is NOT pressed (0)
-                  ; add instructions here to do something when button IS pressed (1)
+  LDA buttons1        ; player 1 - D-Pad Up
+  AND #%00001000      ; only look at bit 3
+  BEQ ReadUpDone      ; branch to ReadUpDone if button is NOT pressed (0)
+                      ; add instructions here to do something when button IS pressed (1)
 
   LDA currDir1
   CMP #DOWN
-  BEQ ReadUpDone  ;  ignore if moving down, bike cannot make 180 degree turn
+  BEQ ReadUpDone      ; ignore if moving down, bike cannot make 180 degree turn
 
   LDA #UP
-  STA nextDir1  
-ReadUpDone:        ; handling this button is done
+  STA nextDir1 
+ReadUpDone:           ; handling this button is done
 
 ReadDown:
-  LDA $4016       ; player 1 - D-Pad Down
-  AND #%00000001  ; only look at bit 0
-  BEQ ReadDownDone   ; branch to ReadDownDone if button is NOT pressed (0)
-                  ; add instructions here to do something when button IS pressed (1)
+  LDA buttons1        ; player 1 - D-Pad Down
+  AND #%00000100      ; only look at bit 2
+  BEQ ReadDownDone    ; branch to ReadDownDone if button is NOT pressed (0)
+                      ; add instructions here to do something when button IS pressed (1)
 
   LDA currDir1
   CMP #UP
-  BEQ ReadDownDone  ;  ignore if moving up, bike cannot make 180 degree turn
+  BEQ ReadDownDone    ;  ignore if moving up, bike cannot make 180 degree turn
 
   LDA #DOWN
-  STA nextDir1  
-ReadDownDone:        ; handling this button is done
+  STA nextDir1 
+ReadDownDone:         ; handling this button is done
 
 ReadLeft:
-  LDA $4016       ; player 1 - D-Pad Left
-  AND #%00000001  ; only look at bit 0
-  BEQ ReadLeftDone   ; branch to ReadLeftDone if button is NOT pressed (0)
-                  ; add instructions here to do something when button IS pressed (1)
-
+  LDA buttons1        ; player 1 - D-Pad Left
+  AND #%00000010      ; only look at bit 1
+  BEQ ReadLeftDone    ; branch to ReadLeftDone if button is NOT pressed (0)
+                      ; add instructions here to do something when button IS pressed (1)
+  
   LDA currDir1
   CMP #RIGHT
-  BEQ ReadLeftDone  ;  ignore if moving right, bike cannot make 180 degree turn
+  BEQ ReadLeftDone    ;  ignore if moving right, bike cannot make 180 degree turn
 
   LDA #LEFT
-  STA nextDir1  
-ReadLeftDone:        ; handling this button is done
+  STA nextDir1
+ReadLeftDone:         ; handling this button is done
   
 ReadRight: 
-  LDA $4016       ; player 1 - D-Pad Right
-  AND #%00000001  ; only look at bit 0
+  LDA buttons1        ; player 1 - D-Pad Right
+  AND #%00000001      ; only look at bit 0
   BEQ ReadRightDone   ; branch to ReadRightDone if button is NOT pressed (0)
-                  ; add instructions here to do something when button IS pressed (1)
+                      ; add instructions here to do something when button IS pressed (1)
 
   LDA currDir1
   CMP #LEFT
-  BEQ ReadRightDone  ;  ignore if moving right, bike cannot make 180 degree turn
+  BEQ ReadRightDone   ; ignore if moving right, bike cannot make 180 degree turn
 
   LDA #RIGHT
-  STA nextDir1  
+  STA nextDir1
 ReadRightDone:        ; handling this button is done
-;  LDA $4016
-;  LSR A            ; bit0 -> Carry
-;  ROL buttons1     ; bit0 <- Carry
-;  DEX
-;  
+
+ReadController1Done:
   RTS
+
   
 ;ReadController2:
 ;  LDA #$01
@@ -480,8 +480,8 @@ ReadRightDone:        ; handling this button is done
 ;  LDX #$08
 ;ReadController2Loop:
 ;  LDA $4017
-;  LSR A            ; bit0 -> Carry
-;  ROL buttons2     ; bit0 <- Carry
+;  LSR A              ; bit0 -> Carry
+;  ROL buttons2       ; bit0 <- Carry
 ;  DEX
 ;  BNE ReadController2Loop
 ;  RTS  
@@ -619,10 +619,10 @@ attribute:
 
 
 
-  .org $FFFA     ;first of the three vectors starts here
-  .dw NMI        ;when an NMI happens (once per frame if enabled) the 
+  .org $FFFA      ;first of the three vectors starts here
+  .dw NMI         ;when an NMI happens (once per frame if enabled) the 
                    ;processor will jump to the label NMI:
-  .dw RESET      ;when the processor first turns on or is reset, it will jump
+  .dw RESET       ;when the processor first turns on or is reset, it will jump
                    ;to the label RESET:
   .dw 0          ;external interrupt IRQ is not used in this tutorial
   
