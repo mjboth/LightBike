@@ -34,10 +34,10 @@ TOPWALL        = $18
 BOTTOMWALL     = $DD
 LEFTWALL       = $07
 
-UP             = $01  ; used to represent directions for bike movement and controller reading
-DOWN           = $02
-LEFT           = $03
-RIGHT          = $04  
+UP             = %00001000  ; used to represent directions for bike movement and controller reading
+DOWN           = %00000100
+LEFT           = %00000010
+RIGHT          = %00000001 
 
 ;;;;;;;;;;;;;;;;;;
 
