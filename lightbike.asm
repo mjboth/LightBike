@@ -22,6 +22,7 @@ nextDir1    .rs 1    ; player 1 next direction
 heldDir1    .rs 1    ; keep player 1 going in the same direction if the button is held
 score1      .rs 1    ; player 1 score, 0-15
 score2      .rs 1    ; player 2 score, 0-15
+wait        .rs 1    ; used to pause the game briefly after a crash
 
 
 ;; DECLARE SOME CONSTANTS HERE
@@ -58,9 +59,7 @@ RESET:
   STX $2001               ; disable rendering
   STX $4010               ; disable DMC IRQs
 
-vblankwait1:              ; First wait for vblank to make sure PPU is ready
-  BIT $2002
-  BPL vblankwait1
+  JSR vblankwait          ; First wait for vblank to make sure PPU is ready
 
 clrmem:
   LDA #$00
@@ -76,10 +75,7 @@ clrmem:
   INX
   BNE clrmem
    
-vblankwait2:               ; Second wait for vblank, PPU is ready after this
-  BIT $2002
-  BPL vblankwait2
-
+  JSR vblankwait           ; Second wait for vblank, PPU is ready after this
 
 LoadPalettes:
   LDA $2002                ; read PPU status to reset the high/low latch
@@ -276,7 +272,11 @@ EngineGameOver:
 ;;;;;;;;;;;
  
 EnginePlaying:
+  LDA wait
+  BEQ Playing
+  JMP Crash
 
+Playing:
   LDA bikeX1
   AND %00000011
   BNE ChangeDirection1Done
@@ -371,7 +371,18 @@ Crash:
   
   LDA #$80
   STA bikeX1
+
+  INC wait               ;; increment the wait counter 
+
+  LDA wait
+  CMP #$60
+  BNE CrashDone          ;; once wait equals 0x60, the counter will reset and the game will start playing again
+
+  LDA #$00
+  STA wait
+
 CrashDone:
+
   JMP GameEngineDone
   
 ;;;;;;;;;;;;;;
