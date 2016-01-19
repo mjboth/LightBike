@@ -1,3 +1,8 @@
+vblankwait:              ; Wait for vblank to make sure PPU is ready
+  BIT $2002
+  BPL vblankwait
+  RTS
+
 UpdateSprites:
   LDA bikeY1             ;;update all bike sprite info
   STA $0200
