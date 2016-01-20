@@ -8,21 +8,25 @@
 
 ;; DECLARE SOME VARIABLES HERE
   .rsset $0000  ;;start variables at ram location 0
-  
+
+pointerLo   .rs 1    ; The lower byte used for indirect indexing while drawing background tiles
+pointerHi   .rs 1    ; The higher byte used for indirect indexing while drawing background tiles
+                     ; These two variables must be in the first 256 bytes of RAM (Zero Page) to work
+
 gamestate   .rs 1    ; .rs 1 means reserve one byte of space
 bikeX1      .rs 1    ; bike horizontal position
 bikeY1      .rs 1    ; bike vertical position
-bikeSpeedX1 .rs 1    ; bike horizontal speed per frame
-bikeSpeedY1 .rs 1    ; bike vertical speed per frame
+bikeSpeed   .rs 1    ; bike speed per frame
 buttons1    .rs 1    ; player 1 gamepad buttons, one bit per button
 buttons2    .rs 1    ; player 2 gamepad buttons, one bit per button
-marked      .rs 750  ; will represent the 25x30 tiles that make up the grid, each tile holds 4 squares
 currDir1    .rs 1    ; player 1 current direction
 nextDir1    .rs 1    ; player 1 next direction
 heldDir1    .rs 1    ; keep player 1 going in the same direction if the button is held
+startDir1   .rs 1    ; lets player 1 decide which direction to start out in
 score1      .rs 1    ; player 1 score, 0-15
 score2      .rs 1    ; player 2 score, 0-15
 wait        .rs 1    ; used to pause the game briefly after a crash
+marked      .rs 750  ; will represent the 25x30 tiles that make up the grid, each tile holds 4 squares
 
 
 ;; DECLARE SOME CONSTANTS HERE
@@ -105,9 +109,7 @@ LoadSpritesLoop:
   CPX #$04                 ; Compare X to hex $10, decimal 16
   BNE LoadSpritesLoop      ; Branch to LoadSpritesLoop if compare was Not Equal to zero
                            ; if compare was equal to 16, keep going down
-              
-              
-;;TO-DO: CLEAN THIS UP              
+                        
 LoadBackground:
   LDA $2002                ; read PPU status to reset the high/low latch
   LDA #$20
@@ -115,41 +117,28 @@ LoadBackground:
   LDA #$00
   STA $2006                ; write the low byte of $2000 address
   LDX #$00                 ; start out at 0
-LoadBackgroundLoop1:
-  LDA background1, x       ; load data from address (background + the value in x)
-  STA $2007                ; write to PPU
-  INX                      ; X = X + 1
-  CPX #$FF                 ; Compare X to hex $80, decimal 128 - copying 128 bytes
-  BNE LoadBackgroundLoop1  ; Branch to LoadBackgroundLoop if compare was Not Equal to zero
-                           ; if compare was equal to 128, keep going down
+  LDY #$00
 
-  LDX #$00
-LoadBackgroundLoop2:
-  LDA background2, x       ; load data from address (background + the value in x)
-  STA $2007                ; write to PPU
-  INX                      ; X = X + 1
-  CPX #$FF                 ; Compare X to hex $80, decimal 128 - copying 128 bytes
-  BNE LoadBackgroundLoop2  ; Branch to LoadBackgroundLoop if compare was Not Equal to zero
-                           ; if compare was equal to 128, keep going down
+  LDA #LOW(background)
+  STA pointerLo            ; put the low byte of the address of background into pointer
+  LDA #HIGH(background)
+  STA pointerHi            ; put the high byte of the address into pointer
 
-  LDX #$00
-LoadBackgroundLoop3:
-  LDA background3, x       ; load data from address (background + the value in x)
-  STA $2007                ; write to PPU
-  INX                      ; X = X + 1
-  CPX #$FF                 ; Compare X to hex $80, decimal 128 - copying 128 bytes
-  BNE LoadBackgroundLoop3  ; Branch to LoadBackgroundLoop if compare was Not Equal to zero
-                           ; if compare was equal to 128, keep going down
+OuterLoop:
+InnerLoop:
+  LDA [pointerLo], y
+  STA $2007                ; copy one background byte
+  INY
+  CPY #$00                 ; increment the offset for the low byte pointer of the background.
+  BNE InnerLoop            
 
-  LDX #$00
-LoadBackgroundLoop4:
-  LDA background4, x       ; load data from address (background + the value in x)
-  STA $2007                ; write to PPU
-  INX                      ; X = X + 1
-  CPX #$C3                 ; Compare X to hex $80, decimal 128 - copying 128 bytes
-  BNE LoadBackgroundLoop4  ; Branch to LoadBackgroundLoop if compare was Not Equal to zero
-                           ; if compare was equal to 128, keep going down              
-              
+  INC pointerHi            ; increment the high byte pointer for the background
+  INX
+  CPX #$04                 
+  BNE OuterLoop            ; the outer loop has to run four times to fully draw the background
+ LoadBackgroundDone:
+
+
 ;LoadAttribute:
 ;  LDA $2002               ; read PPU status to reset the high/low latch
 ;  LDA #$23
@@ -182,8 +171,7 @@ Begin:
   STA bikeX1
   
   LDA #$02
-  STA bikeSpeedX1
-  STA bikeSpeedY1
+  STA bikeSpeed
 
 
 ;;:Set starting game state
@@ -274,17 +262,40 @@ EngineGameOver:
 EnginePlaying:
   LDA wait
   BEQ Playing
-  JMP Crash
+
+Waiting:
+  DEC wait               ;; decrement the wait counter after every NMI interupt
+
+SetStartingDirection:            ;; the starting direction lets the player face any direction before the game begins
+  LDA nextDir1                   ;; as opposed to next direction which will not accept 180 degree turns
+  BEQ SetStartingDirectionDone   ;; if no directional button was pressed, do not overwrite a starting direction with zero
+  STA startDir1                  
+  LDA #$00
+  STA nextDir1 
+SetStartingDirectionDone:
+
+  LDA wait
+  BNE WaitDone           ;; if we are still waiting, ignore the next part
+
+  LDA startDir1
+  STA currDir1           ;; set the starting direction to the current direction
+  BNE WaitDone
+
+  LDA #RIGHT             ;; if player 1 did not request a starting direction - send them right
+  STA currDir1
+WaitDone:
+  JMP GameEngineDone
+
 
 Playing:
-  LDA bikeX1
-  AND %00000011
+  LDA bikeX1                ; will not let the bike change direction unless it has finished moving onto a square
+  AND #%00000011
   BNE ChangeDirection1Done
   LDA bikeY1
-  AND %00000011
+  AND #%00000011           
   BNE ChangeDirection1Done
 
-  LDA nextDir1           ; if no change was requested, skip the next part
+  LDA nextDir1              ; if no change was requested, skip the next part
   BEQ ChangeDirection1Done
 
 ChangeDirection1:
@@ -301,7 +312,7 @@ MoveBikeUp:
 
   LDA bikeY1
   SEC
-  SBC bikeSpeedY1        ;;bikeY1 position = bikeY1 - bikeSpeedY1
+  SBC bikeSpeed        ;;bikeY1 position = bikeY1 - bikeSpeed
   STA bikeY1
 
   LDA bikeY1
@@ -317,7 +328,7 @@ MoveBikeDown:
 
   LDA bikeY1
   CLC
-  ADC bikeSpeedY1        ;;bikeY1 position = bikeY1 + bikeSpeedY1
+  ADC bikeSpeed        ;;bikeY1 position = bikeY1 + bikeSpeed
   STA bikeY1
 
   LDA bikeY1
@@ -333,7 +344,7 @@ MoveBikeLeft:
 
   LDA bikeX1
   SEC
-  SBC bikeSpeedX1        ;;bikeX1 position = bikeX1 - bikeSpeedX1
+  SBC bikeSpeed        ;;bikeX1 position = bikeX1 - bikeSpeed
   STA bikeX1
 
   LDA bikeX1
@@ -349,7 +360,7 @@ MoveBikeRight:
 
   LDA bikeX1
   CLC
-  ADC bikeSpeedX1        ;;bikeX1 position = bikeX1 + bikeSpeedX1
+  ADC bikeSpeed        ;;bikeX1 position = bikeX1 + bikeSpeed
   STA bikeX1
 
   LDA bikeX1
@@ -361,26 +372,19 @@ MoveDone:
 
   JMP CrashDone
 Crash:
-  LDA #RIGHT
-  STA currDir1
+  LDA #$60
+  STA wait                ;;start the waiting timer for the next round
+
   LDA #$00
-  STA nextDir1
-  
+  STA currDir1           ;; clear the current direction
+  STA nextDir1           ;; clear the next planned direction
+  STA startDir1          ;; dont let the selected starting direction carryover into the next round
+
   LDA #$50
   STA bikeY1
   
   LDA #$80
   STA bikeX1
-
-  INC wait               ;; increment the wait counter 
-
-  LDA wait
-  CMP #$60
-  BNE CrashDone          ;; once wait equals 0x60, the counter will reset and the game will start playing again
-
-  LDA #$00
-  STA wait
-
 CrashDone:
 
   JMP GameEngineDone
@@ -406,12 +410,13 @@ sprites:
   .db $80, $28, $00, $80   ;sprite 0
 
 
-background1:
+background:
+
   .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;row 1
   .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;Blank (only seen on PAL Standard)
 
   .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;row 2
-  .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;Score
+  .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;Blank
 
   .db $25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25  ;;row 3
   .db $25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25  ;;TopWall
@@ -429,9 +434,7 @@ background1:
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
   .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 8
-  .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A      ;;Grid 
-background2:
-  .db $25  ;;Grid
+  .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
   .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 9
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
@@ -455,10 +458,7 @@ background2:
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
   .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 16
-  .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A          ;;Grid
-
-background3:
-  .db $2A,$25  ;;all sky
+  .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
   .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 17
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
@@ -487,9 +487,6 @@ background3:
   .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 25
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-background4:
-  .db $2A,$2A,$25  ;;Grid
-
   .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 26
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
@@ -499,13 +496,10 @@ background4:
   .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 28
   .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
 
-  .db $25,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A  ;;row 29
-  .db $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A,$25  ;;Grid
-
-  .db $25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25  ;;row 30
+  .db $25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25  ;;row 29
   .db $25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25  ;;BottomWall
 
-  .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;row 31
+  .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;row 30
   .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;Blank (only seen on PAL Standard)
 
 
