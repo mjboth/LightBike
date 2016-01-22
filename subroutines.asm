@@ -3,6 +3,9 @@ vblankwait:              ; Wait for vblank to make sure PPU is ready
   BPL vblankwait
   RTS
 
+
+;;;;;;;;;;;;;;;
+
 UpdateSprites:
   LDA bikeY1             ;;update all bike sprite info
   STA $0200
@@ -22,6 +25,38 @@ UpdateSprites:
 
 ;;;;;;;;;;;;;;;
 
+LoadBackground:
+  LDA $2002                ; read PPU status to reset the high/low latch
+  LDA #$20
+  STA $2006                ; write the high byte of $2000 address
+  LDA #$00
+  STA $2006                ; write the low byte of $2000 address
+  LDX #$00                 ; start out at 0
+  LDY #$00
+
+  LDA #LOW(background)
+  STA pointerLo            ; put the low byte of the address of background into pointer
+  LDA #HIGH(background)
+  STA pointerHi            ; put the high byte of the address into pointer
+
+OuterLoop:
+InnerLoop:
+  LDA [pointerLo], y
+  STA $2007                ; copy one background byte
+  INY
+  CPY #$00                 ; increment the offset for the low byte pointer of the background.
+  BNE InnerLoop            
+
+  INC pointerHi            ; increment the high byte pointer for the background
+  INX
+  CPX #$04                 
+  BNE OuterLoop            ; the outer loop has to run four times to fully draw the background
+ LoadBackgroundDone:
+  RTS
+
+
+;;;;;;;;;;;;;;;
+
 DrawScore:
   ;;draw score on screen using background tiles
   ;;or using many sprites
@@ -30,8 +65,37 @@ DrawScore:
  
 ;;;;;;;;;;;;;;;
 
+EnableRendering:
+  LDA #%10010000       ; enable NMI, sprites from Pattern Table 0, background from Pattern Table 1
+  STA $2000
 
- 
+  LDA #%00011110       ; enable sprites, enable background, no clipping on left side
+  STA $2001
+  RTS
+
+
+;;;;;;;;;;;;;;;
+
+DisableRendering:
+  LDA #$00       
+  STA $2000      ; disable NMI, sprites from Pattern Table 0, background from Pattern Table 1
+  STA $2001      ; disable sprites, disable background
+  RTS
+
+
+;;;;;;;;;;;;;;;
+
+; restore the PPU address register ($2006) to its idle address ($0800) in order to render the next frame properly
+RestorePPUADDR:
+  LDA #$08             
+  STA $2006
+  LDA #$00
+  STA $2006
+  RTS
+
+
+;;;;;;;;;;;;;;;
+
 ReadController1:
   LDA #$01
   STA $4016

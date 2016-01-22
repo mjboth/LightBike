@@ -12,7 +12,6 @@
 pointerLo   .rs 1    ; The lower byte used for indirect indexing while drawing background tiles
 pointerHi   .rs 1    ; The higher byte used for indirect indexing while drawing background tiles
                      ; These two variables must be in the first 256 bytes of RAM (Zero Page) to work
-
 gamestate   .rs 1    ; .rs 1 means reserve one byte of space
 bikeX1      .rs 1    ; bike horizontal position
 bikeY1      .rs 1    ; bike vertical position
@@ -26,7 +25,11 @@ startDir1   .rs 1    ; lets player 1 decide which direction to start out in
 score1      .rs 1    ; player 1 score, 0-15
 score2      .rs 1    ; player 2 score, 0-15
 wait        .rs 1    ; used to pause the game briefly after a crash
-marked      .rs 750  ; will represent the 25x30 tiles that make up the grid, each tile holds 4 squares
+gridBuf     .rs 750  ; used to redraw a new grid everyframe
+gridPointer .rs 1    ; points to the first background tile on the grid as know by the PPU (which is $2060)
+bike1Pointer .rs 1   ; points to the background tile player 1 is on (relative to gridPointer)
+flag        .rs 1    ; used at the start of NMI to tell the program its time to update the background in the PPU
+
 
 
 ;; DECLARE SOME CONSTANTS HERE
@@ -109,35 +112,8 @@ LoadSpritesLoop:
   CPX #$04                 ; Compare X to hex $10, decimal 16
   BNE LoadSpritesLoop      ; Branch to LoadSpritesLoop if compare was Not Equal to zero
                            ; if compare was equal to 16, keep going down
-                        
-LoadBackground:
-  LDA $2002                ; read PPU status to reset the high/low latch
-  LDA #$20
-  STA $2006                ; write the high byte of $2000 address
-  LDA #$00
-  STA $2006                ; write the low byte of $2000 address
-  LDX #$00                 ; start out at 0
-  LDY #$00
 
-  LDA #LOW(background)
-  STA pointerLo            ; put the low byte of the address of background into pointer
-  LDA #HIGH(background)
-  STA pointerHi            ; put the high byte of the address into pointer
-
-OuterLoop:
-InnerLoop:
-  LDA [pointerLo], y
-  STA $2007                ; copy one background byte
-  INY
-  CPY #$00                 ; increment the offset for the low byte pointer of the background.
-  BNE InnerLoop            
-
-  INC pointerHi            ; increment the high byte pointer for the background
-  INX
-  CPX #$04                 
-  BNE OuterLoop            ; the outer loop has to run four times to fully draw the background
- LoadBackgroundDone:
-
+  JSR LoadBackground
 
 ;LoadAttribute:
 ;  LDA $2002               ; read PPU status to reset the high/low latch
@@ -178,17 +154,12 @@ Begin:
   LDA #STATEPLAYING
   STA gamestate
 
-
-              
-  LDA #%10010000       ; enable NMI, sprites from Pattern Table 0, background from Pattern Table 1
-  STA $2000
-
-  LDA #%00011110       ; enable sprites, enable background, no clipping on left side
-  STA $2001
+  JSR EnableRendering              
 
 Forever:
   JMP Forever          ; jump back to Forever, infinite loop, waiting for NMI
-  
+
+;; End of the RESET HANDLER
  
 
 NMI:
@@ -207,14 +178,43 @@ NMI:
   LDA #$00             ;;tell the ppu there is no background scrolling
   STA $2005
   STA $2005
-    
+  
+  LDA flag             ; if the update flag was not set (flag= 0), do not update the background
+  BEQ UpdateDone
+
+  JSR vblankwait       ; if the PPU is currently rendering the next frame, let it finish
+  JSR DisableRendering
+
+UpdateGrid:
+  LDA $2002                ; read PPU status to reset the high/low latch
+  LDA #$20
+  STA $2006                ; write the high byte of backgroud tile address
+  LDA #$61
+  STA $2006                ; write the low byte of background tile address, set to $2061 now for debugging reasons
+  LDX #$00                 ; start out at 0
+  LDY #$00
+
+  LDA #$01                 ; represents the #1 tile
+  STA $2007                ; copy one background byte
+
+  JSR RestorePPUADDR
+  JSR EnableRendering
+
+  LDA #$00
+  STA flag
+UpdateDone:
+
   ;;;all graphics updates done by here, run game engine
+
+
 
 ReadControllers:
   JSR ReadController1  ;;get the current button data for player 1
 ; JSR ReadController2  ;;get the current button data for player 2
 ReadControllersDone:
-  
+
+
+
 GameEngine:  
   LDA gamestate
   CMP #STATETITLE
@@ -294,6 +294,9 @@ Playing:
   LDA bikeY1
   AND #%00000011           
   BNE ChangeDirection1Done
+
+  LDA #$01
+  STA flag                  ; set the flag to update the background next NMI call
 
   LDA nextDir1              ; if no change was requested, skip the next part
   BEQ ChangeDirection1Done
@@ -379,16 +382,26 @@ Crash:
   STA currDir1           ;; clear the current direction
   STA nextDir1           ;; clear the next planned direction
   STA startDir1          ;; dont let the selected starting direction carryover into the next round
+  STA flag
 
   LDA #$50
   STA bikeY1
   
   LDA #$80
   STA bikeX1
+
+  JSR vblankwait
+  JSR DisableRendering
+  JSR LoadBackground     ;; redraw the background in its original, clean state
+  JSR RestorePPUADDR     ;; reset the PPU address register so the next frame will render properly
+  JSR EnableRendering
 CrashDone:
 
   JMP GameEngineDone
-  
+
+;; End of the NMI Handler
+
+
 ;;;;;;;;;;;;;;
 
   .include "subroutines.asm"
@@ -408,12 +421,13 @@ palette:
 sprites:
      ;vert tile attr horiz
   .db $80, $28, $00, $80   ;sprite 0
+;  .db $08, $28, $00, $18   ;sprite 1  Need to load a second sprite soon
 
 
 background:
 
   .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;row 1
-  .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;Blank (only seen on PAL Standard)
+  .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;Blank (only seen on PAL Televisions)
 
   .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;row 2
   .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;Blank
@@ -500,7 +514,7 @@ background:
   .db $25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25,$25  ;;BottomWall
 
   .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;row 30
-  .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;Blank (only seen on PAL Standard)
+  .db $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24  ;;Blank (only seen on PAL Televisions)
 
 
 
