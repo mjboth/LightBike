@@ -108,7 +108,7 @@ SetUp:
 
   CLC
   LDA #LOW(gridPointer)
-  ADC #$A6
+  ADC #$46
   STA tilePointer1Lo
   LDA #HIGH(gridPointer)
   ADC #$01
@@ -152,7 +152,7 @@ MovingUp:
   BEQ NextTileUp   ; fetch the tile above the current one
   
   LDA square1
-  AND $%00000001   
+  AND #%00000001   
   STA square1      ; otherwise set the player on the upper square
 
   JMP UpdateLocationDone
@@ -167,7 +167,7 @@ MovingDown:
   BNE NextTileDown  ; fetch the tile bellow the current one
   
   LDA square1
-  ORA $%00000010    
+  ORA #%00000010    
   STA square1       ; otherwise set the player on the bottom square
 
   JMP UpdateLocationDone
@@ -182,7 +182,7 @@ MovingLeft:
   BEQ NextTileLeft  ; fetch the tile left of the current one
   
   LDA square1
-  AND $%00000010    
+  AND #%00000010    
   STA square1       ; otherwise set the player on the left square
 
   JMP UpdateLocationDone
@@ -197,7 +197,7 @@ MovingRight:
   BNE NextTileRight    ; fetch the tile bellow the current one
   
   LDA square1
-  ORA $%00000001  
+  ORA #%00000001  
   STA square1          ; otherwise set the player on the right tile
 
   JMP UpdateLocationDone
@@ -205,10 +205,14 @@ MovingRightDone:
 
 
 NextTileUp:
-  CLC
+  SEC
   LDA tilePointer1Lo
-  SBC #$20             ; Hex 20 (Dec 32) is the amount of tiles in a single row on the screen
-  STA tilePointer1Lo
+  SBC #$20
+  STA tilePointer1Lo   ; Hex 20 (Dec 32) is the amount of tiles in a single row on the screen
+
+  LDA tilePointer1Hi
+  SBC #$00            
+  STA tilePointer1Hi   ; Add the carry bit to the high byte address
 
   LDA square1
   ORA #%00000010
@@ -219,8 +223,12 @@ NextTileUp:
 NextTileDown:
   CLC
   LDA tilePointer1Lo
-  ADC #$20             ; Hex 20 (Dec 32) is the amount of tiles in a single row on the screen
-  STA tilePointer1Lo
+  ADC #$20             
+  STA tilePointer1Lo   ; Hex 20 (Dec 32) is the amount of tiles in a single row on the screen
+
+  LDA tilePointer1Hi
+  ADC #$00            
+  STA tilePointer1Hi   ; Add the carry bit to the high byte address
 
   LDA square1
   AND #%00000001
@@ -229,10 +237,14 @@ NextTileDown:
   JMP UpdateLocationDone
 
 NextTileLeft:
-  CLC
+  SEC
   LDA tilePointer1Lo
   SBC #$01
   STA tilePointer1Lo
+
+  LDA tilePointer1Hi
+  SBC #$00            
+  STA tilePointer1Hi   ; Add the carry bit to the high byte address
 
   LDA square1
   ORA #%00000001
@@ -245,6 +257,10 @@ NextTileRight:
   LDA tilePointer1Lo
   ADC #$01
   STA tilePointer1Lo
+
+  LDA tilePointer1Hi
+  ADC #$00             
+  STA tilePointer1Hi   ; Add the carry bit to the high byte address
 
   LDA square1
   AND #%00000010

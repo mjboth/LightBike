@@ -202,15 +202,12 @@ UpdateGrid:
   JSR DisableRendering
 
   LDA $2002                ; read PPU status to reset the high/low latch
-  LDA #$20
+  LDA tilePointer1Hi
   STA $2006                ; write the high byte of backgroud tile address
-  LDA #$40
+  LDA tilePointer1Lo
   STA $2006                ; write the low byte of background tile address, set to $2061 now for debugging reasons
-  LDX #$00                 ; start out at 0
-  LDY #$00
 
-  LDA currDir1             ; represents the direction the tile is heading by thier constant values (up=8,down=4)
-  ADC #$52                 ; adds the offset for where the tiles representing integers are
+  LDA #$52
   STA $2007                ; copy one background byte
 
   JSR RestorePPUADDR
