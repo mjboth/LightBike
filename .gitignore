@@ -61,3 +61,10 @@ Nestopia140bin/nestopia.log
 *.html
 Nestopia140bin/schemadb.xsd
 *.xml
+mario.chr
+background3/background3.asm
+background3.nes.deb
+background3.nes
+background3.fns
+background3.asm
+background.bat

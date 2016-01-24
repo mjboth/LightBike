@@ -13,6 +13,15 @@ pointerLo   .rs 1    ; The lower byte used for indirect indexing while drawing b
 pointerHi   .rs 1    ; The higher byte used for indirect indexing while drawing background tiles
                      ; These two variables must be in the first 256 bytes of RAM (Zero Page) to work
 gamestate   .rs 1    ; .rs 1 means reserve one byte of space
+
+tilePointer1Lo .rs 1   ; used to point at the tile where player 1 is (relative to the gridPointer)
+tilePointer1Hi .rs 1   ;
+square1        .rs 1   ; used to tell which square on the tile player 1 is
+
+nxtTilePoint1Lo .rs 1  ; using current direction and location: determine the players next poisiton
+nxtTilePoint1Hi .rs 1  ; next position is used to determine if the next space is ocuppied and the player has crashed
+nxtSquare       .rs 1  ;
+
 bikeX1      .rs 1    ; bike horizontal position
 bikeY1      .rs 1    ; bike vertical position
 bikeSpeed   .rs 1    ; bike speed per frame
@@ -25,9 +34,7 @@ startDir1   .rs 1    ; lets player 1 decide which direction to start out in
 score1      .rs 1    ; player 1 score, 0-15
 score2      .rs 1    ; player 2 score, 0-15
 wait        .rs 1    ; used to pause the game briefly after a crash
-gridBuf     .rs 750  ; used to redraw a new grid everyframe
-gridPointer .rs 1    ; points to the first background tile on the grid as know by the PPU (which is $2060)
-bike1Pointer .rs 1   ; points to the background tile player 1 is on (relative to gridPointer)
+grid        .rs 832  ; used to redraw a new grid everyframe
 flag        .rs 1    ; used at the start of NMI to tell the program its time to update the background in the PPU
 
 
@@ -46,6 +53,18 @@ UP             = %00001000  ; used to represent directions for bike movement and
 DOWN           = %00000100
 LEFT           = %00000010
 RIGHT          = %00000001 
+
+;; used to represent which of the four square spaces of a tile the player is on
+;;             in hex           in binary
+TOPLEFT        = $00   ;            00
+TOPRIGHT       = $01   ;            01
+BOTLEFT        = $02   ;            10
+BOTRIGHT       = $03   ;            11
+;;
+;; so the right bit states whether its on the left(0) or right(1) square
+;; as the left bit states if its the top(0) or bottom(1) square
+
+gridPointer    = $2040  ; the location of the first grid tile in the PPU, used as an offset for gird
 
 ;;;;;;;;;;;;;;;;;;
 
@@ -134,17 +153,8 @@ LoadSpritesLoop:
 
 ;;;Set some initial bike stats
 Begin:
-  LDA #RIGHT
-  STA currDir1
-  LDA #$00
-  STA nextDir1
-  STA heldDir1
   
-  LDA #$50
-  STA bikeY1
-  
-  LDA #$80
-  STA bikeX1
+  JSR SetUp
   
   LDA #$02
   STA bikeSpeed
@@ -194,7 +204,7 @@ UpdateGrid:
   LDA $2002                ; read PPU status to reset the high/low latch
   LDA #$20
   STA $2006                ; write the high byte of backgroud tile address
-  LDA #$61
+  LDA #$40
   STA $2006                ; write the low byte of background tile address, set to $2061 now for debugging reasons
   LDX #$00                 ; start out at 0
   LDY #$00
@@ -305,22 +315,13 @@ WaitDone:
 Playing:
   LDA bikeX1                ; will not let the bike change direction unless it has finished moving onto a square
   AND #%00000011
-  BNE ChangeDirection1Done
+  BNE MoveBikeUp
   LDA bikeY1
   AND #%00000011           
-  BNE ChangeDirection1Done
+  BNE MoveBikeUp
 
-  LDA #$01
-  STA flag                  ; set the flag to update the background next NMI call
+  JSR Tick
 
-  LDA nextDir1              ; if no change was requested, skip the next part
-  BEQ ChangeDirection1Done
-
-ChangeDirection1:
-  STA currDir1
-  LDA #$00
-  STA nextDir1
-ChangeDirection1Done:
 
 
 MoveBikeUp:
@@ -389,21 +390,9 @@ MoveBikeRightDone:
 MoveDone:
 
   JMP CrashDone
+
 Crash:
-  LDA #$60
-  STA wait                ;;start the waiting timer for the next round
-
-  LDA #$00
-  STA currDir1           ;; clear the current direction
-  STA nextDir1           ;; clear the next planned direction
-  STA startDir1          ;; dont let the selected starting direction carryover into the next round
-  STA flag
-
-  LDA #$50
-  STA bikeY1
-  
-  LDA #$80
-  STA bikeX1
+  JSR SetUp              ;; place the bikes in their original position
 
   LDA #$02
   STA flag

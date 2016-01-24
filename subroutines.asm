@@ -96,6 +96,170 @@ RestorePPUADDR:
 
 ;;;;;;;;;;;;;;;
 
+SetUp:
+
+  LDA #$60
+  STA wait                ;;start the waiting timer for the next round
+
+  LDA #$00
+  STA currDir1           ;; clear the current direction
+  STA nextDir1           ;; clear the next planned direction
+  STA startDir1          ;; dont let the selected starting direction carryover into the next round
+
+  CLC
+  LDA #LOW(gridPointer)
+  ADC #$A6
+  STA tilePointer1Lo
+  LDA #HIGH(gridPointer)
+  ADC #$01
+  STA tilePointer1Hi
+
+  LDA #$00
+  STA square1
+
+  ;; aligns the bike's screen location with the tile+square location
+  LDA #$60
+  STA bikeY1
+  
+  LDA #$30
+  STA bikeX1
+  RTS
+
+
+;;;;;;;;;;;;;;;
+
+Tick:
+  LDA #$01
+  STA flag                  ; set the flag to update the background next NMI call
+
+  LDA nextDir1              ; if no change was requested, skip the next part
+  BEQ ChangeDirection1Done
+
+ChangeDirection1:
+  STA currDir1
+  LDA #$00
+  STA nextDir1
+ChangeDirection1Done:
+
+UpdateLocation:
+  LDA currDir1
+
+  CMP #UP
+  BNE MovingUpDone
+MovingUp:
+  LDA square1
+  AND #%00000010   ; if the player is on a top square in the tile
+  BEQ NextTileUp   ; fetch the tile above the current one
+  
+  LDA square1
+  AND $%00000001   
+  STA square1      ; otherwise set the player on the upper square
+
+  JMP UpdateLocationDone
+MovingUpDone:
+
+
+  CMP #DOWN
+  BNE MovingDownDone
+MovingDown:
+  LDA square1
+  AND #%00000010    ; if the player is on a bottom square in the tile
+  BNE NextTileDown  ; fetch the tile bellow the current one
+  
+  LDA square1
+  ORA $%00000010    
+  STA square1       ; otherwise set the player on the bottom square
+
+  JMP UpdateLocationDone
+MovingDownDone:
+
+
+  CMP #LEFT
+  BNE MovingLeftDone
+MovingLeft:
+  LDA square1
+  AND #%00000001    ; if the player is on a left square in the tile
+  BEQ NextTileLeft  ; fetch the tile left of the current one
+  
+  LDA square1
+  AND $%00000010    
+  STA square1       ; otherwise set the player on the left square
+
+  JMP UpdateLocationDone
+MovingLeftDone:
+
+
+  CMP #RIGHT
+  BNE MovingRightDone  ; this line should never be reached
+MovingRight:
+  LDA square1
+  AND #%00000001       ; if the player is on a bottom square in the tile
+  BNE NextTileRight    ; fetch the tile bellow the current one
+  
+  LDA square1
+  ORA $%00000001  
+  STA square1          ; otherwise set the player on the right tile
+
+  JMP UpdateLocationDone
+MovingRightDone:
+
+
+NextTileUp:
+  CLC
+  LDA tilePointer1Lo
+  SBC #$20             ; Hex 20 (Dec 32) is the amount of tiles in a single row on the screen
+  STA tilePointer1Lo
+
+  LDA square1
+  ORA #%00000010
+  STA square1          ; set the square to the one on the bottom of the tile, same column
+
+  JMP UpdateLocationDone
+
+NextTileDown:
+  CLC
+  LDA tilePointer1Lo
+  ADC #$20             ; Hex 20 (Dec 32) is the amount of tiles in a single row on the screen
+  STA tilePointer1Lo
+
+  LDA square1
+  AND #%00000001
+  STA square1          ; set the square to the one on the top of the tile, same column
+
+  JMP UpdateLocationDone
+
+NextTileLeft:
+  CLC
+  LDA tilePointer1Lo
+  SBC #$01
+  STA tilePointer1Lo
+
+  LDA square1
+  ORA #%00000001
+  STA square1          ; set the square to the one on the right of the tile, same height
+
+  JMP UpdateLocationDone 
+
+NextTileRight:
+  CLC
+  LDA tilePointer1Lo
+  ADC #$01
+  STA tilePointer1Lo
+
+  LDA square1
+  AND #%00000010
+  STA square1          ; set the square to the one on the left of the tile, same height
+
+UpdateLocationDone:
+
+CheckCrash:
+TickDone:
+
+  RTS
+
+
+;;;;;;;;;;;;;;;
+
 ReadController1:
   LDA #$01
   STA $4016
