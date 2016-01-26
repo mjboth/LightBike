@@ -56,7 +56,6 @@ InnerLoop:
 
 
 ;;;;;;;;;;;;;;;
-
 DrawScore:
   ;;draw score on screen using background tiles
   ;;or using many sprites
@@ -106,15 +105,12 @@ SetUp:
   STA nextDir1           ;; clear the next planned direction
   STA startDir1          ;; dont let the selected starting direction carryover into the next round
 
-  CLC
-  LDA #LOW(gridPointer)
-  ADC #$46
+  LDA #$46
   STA tilePointer1Lo
-  LDA #HIGH(gridPointer)
-  ADC #$01
+  LDA #$01
   STA tilePointer1Hi
 
-  LDA #$00
+  LDA #TOPLEFT
   STA square1
 
   ;; aligns the bike's screen location with the tile+square location
@@ -123,6 +119,27 @@ SetUp:
   
   LDA #$30
   STA bikeX1
+
+  LDA #LOW(grid)
+  STA pointerLo            ; put the low byte of the address of background into pointer
+  LDA #HIGH(grid)
+  STA pointerHi            ; put the high byte of the address into pointer
+
+  LDX #$00                 ; start out at 0
+  LDY #$00
+ResetGridOuterLoop:
+ResetGridInnerLoop:
+  LDA #$00
+  STA [pointerLo], y              ; copy one background byte
+  INY
+  CPY #$00                 ; increment the offset for the low byte pointer of the background.
+  BNE ResetGridInnerLoop            
+
+  INC pointerHi            ; increment the high byte pointer for the background
+  INX
+  CPX #$04                 
+  BNE ResetGridOuterLoop            ; the outer loop has to run four times to fully draw the background
+SetUpDone:
   RTS
 
 
@@ -148,12 +165,12 @@ UpdateLocation:
   BNE MovingUpDone
 MovingUp:
   LDA square1
-  AND #%00000010   ; if the player is on a top square in the tile
-  BEQ NextTileUp   ; fetch the tile above the current one
+  AND #BOTTOMSQUARE   ; if the player is on a top square in the tile
+  BEQ NextTileUp      ; fetch the tile above the current one
   
   LDA square1
   AND #%00000001   
-  STA square1      ; otherwise set the player on the upper square
+  STA square1         ; otherwise set the player on the upper square
 
   JMP UpdateLocationDone
 MovingUpDone:
@@ -163,13 +180,13 @@ MovingUpDone:
   BNE MovingDownDone
 MovingDown:
   LDA square1
-  AND #%00000010    ; if the player is on a bottom square in the tile
-  BNE NextTileDown  ; fetch the tile bellow the current one
+  AND #BOTTOMSQUARE    ; if the player is on a bottom square in the tile
+  BNE NextTileDown     ; fetch the tile bellow the current one
   
   LDA square1
   ORA #%00000010    
-  STA square1       ; otherwise set the player on the bottom square
-
+  STA square1          ; otherwise set the player on the bottom square
+ 
   JMP UpdateLocationDone
 MovingDownDone:
 
@@ -178,12 +195,12 @@ MovingDownDone:
   BNE MovingLeftDone
 MovingLeft:
   LDA square1
-  AND #%00000001    ; if the player is on a left square in the tile
-  BEQ NextTileLeft  ; fetch the tile left of the current one
+  AND #RIGHTSQUARE     ; if the player is on a left square in the tile
+  BEQ NextTileLeft     ; fetch the tile left of the current one
   
   LDA square1
   AND #%00000010    
-  STA square1       ; otherwise set the player on the left square
+  STA square1          ; otherwise set the player on the left square
 
   JMP UpdateLocationDone
 MovingLeftDone:
@@ -193,7 +210,7 @@ MovingLeftDone:
   BNE MovingRightDone  ; this line should never be reached
 MovingRight:
   LDA square1
-  AND #%00000001       ; if the player is on a bottom square in the tile
+  AND #RIGHTSQUARE     ; if the player is on a bottom square in the tile
   BNE NextTileRight    ; fetch the tile bellow the current one
   
   LDA square1
