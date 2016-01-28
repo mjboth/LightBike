@@ -247,24 +247,35 @@ UpdateGrid:
   STA $2006                ; write the low byte of background tile address, set to $2061 now for debugging reasons
 
 
+  CLC
+  LDA #LOW(grid)
+  STA pointerLo
+  LDA #HIGH(grid)
+  STA pointerHi
+
   LDA #%00000001
   LDX square1
-SetGridTile:
-  BEQ FetchGridTile
+SetTileOperator:
+  BEQ LocateGridTile
   ASL A
   ASL A
   DEX
-  JMP SetGridTile
-  
-FetchGridTile:
-  STA tileOperator
+  JMP SetTileOperator
 
+LocateGridTile:  
+  STA tileOperator
   LDY tilePointer1Lo
   LDX tilePointer1Hi
+LocateGridTileLoop:
+  BEQ FetchGridTile
+  INC pointerHi
+  DEX
+  JMP LocateGridTileLoop
 
-  LDA (grid), y
+FetchGridTile:
+  LDA [pointerLo], y
   ORA tileOperator
-  STA (grid), y
+  STA [pointerLo],y
 
   STA $2007                ; copy one background byte
 
