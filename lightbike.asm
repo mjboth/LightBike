@@ -20,11 +20,7 @@ square1        .rs 1   ; used to tell which square on the tile player 1 is
 
 nxtTilePoint1Lo .rs 1  ; using current direction and location: determine the players next poisiton
 nxtTilePoint1Hi .rs 1  ; next position is used to determine if the next space is ocuppied and the player has crashed
-nxtSquare       .rs 1  ;
-
-
-  .rsset $0300  ;;start the remaining variables at ram location 0x0300, this is because the stack is located at
-                ;;0x01FF so the following variables would overwrite the stack
+nxtSquare1       .rs 1  ;
 
 bikeX1      .rs 1    ; bike horizontal position
 bikeY1      .rs 1    ; bike vertical position
@@ -39,9 +35,14 @@ score1      .rs 1    ; player 1 score, 0-15
 score2      .rs 1    ; player 2 score, 0-15
 wait        .rs 1    ; used to pause the game briefly after a crash
 flag        .rs 1    ; used at the start of NMI to tell the program its time to update the background in the PPU
+tileOperator .rs 1
+
+  .rsset $0300  ;;start the remaining variables at ram location 0x0300, this is because the stack is located at
+                ;;0x01FF so the following variables would overwrite the stack
+
+
 grid        .rs 1279 ; stores the tile information in a 1279 byte (0x4FF) array, this is because the MOS 6502,
                      ; only handes 8 bit math, so we have to manually loop the call to grid 4 times 
-tileOperator .rs 1
 
 
 
@@ -367,6 +368,8 @@ WaitDone:
 
 
 Playing:
+  DEC flag
+
   LDA bikeX1             ; will not let the bike change direction unless it has finished moving onto a square
   AND #%00000011
   BNE MoveBikeUp

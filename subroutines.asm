@@ -101,23 +101,29 @@ SetUp:
   STA wait                ;;start the waiting timer for the next round
 
   LDA #$00
+  STA flag
+
+  LDA #$00
   STA currDir1           ;; clear the current direction
   STA nextDir1           ;; clear the next planned direction
   STA startDir1          ;; dont let the selected starting direction carryover into the next round
 
-  LDA #$46
+  LDA #$21
   STA tilePointer1Lo
-  LDA #$01
+  STA nxtTilePoint1Lo
+  LDA #$00
   STA tilePointer1Hi
+  STA nxtTilePoint1Hi
+  STA nxtSquare1
 
-  LDA #TOPLEFT
+  LDA #$00
   STA square1
 
   ;; aligns the bike's screen location with the tile+square location
-  LDA #$60
+  LDA #$18
   STA bikeY1
   
-  LDA #$30
+  LDA #$08
   STA bikeX1
 
   LDA #LOW(grid)
@@ -159,8 +165,14 @@ ChangeDirection1:
 ChangeDirection1Done:
 
 UpdateLocation:
-  LDA currDir1
+  LDA nxtTilePoint1Hi
+  STA tilePointer1Hi
+  LDA nxtTilePoint1Lo
+  STA tilePointer1Lo
+  LDA nxtSquare1
+  STA square1
 
+  LDA currDir1
   CMP #UP
   BNE MovingUpDone
 MovingUp:
@@ -170,7 +182,7 @@ MovingUp:
   
   LDA square1
   AND #%00000001   
-  STA square1         ; otherwise set the player on the upper square
+  STA nxtSquare1         ; otherwise set the player on the upper square
 
   JMP UpdateLocationDone
 MovingUpDone:
@@ -185,7 +197,7 @@ MovingDown:
   
   LDA square1
   ORA #%00000010    
-  STA square1          ; otherwise set the player on the bottom square
+  STA nxtSquare1          ; otherwise set the player on the bottom square
  
   JMP UpdateLocationDone
 MovingDownDone:
@@ -200,7 +212,7 @@ MovingLeft:
   
   LDA square1
   AND #%00000010    
-  STA square1          ; otherwise set the player on the left square
+  STA nxtSquare1          ; otherwise set the player on the left square
 
   JMP UpdateLocationDone
 MovingLeftDone:
@@ -215,7 +227,7 @@ MovingRight:
   
   LDA square1
   ORA #%00000001  
-  STA square1          ; otherwise set the player on the right tile
+  STA nxtSquare1          ; otherwise set the player on the right tile
 
   JMP UpdateLocationDone
 MovingRightDone:
@@ -225,15 +237,15 @@ NextTileUp:
   SEC
   LDA tilePointer1Lo
   SBC #$20
-  STA tilePointer1Lo   ; Hex 20 (Dec 32) is the amount of tiles in a single row on the screen
+  STA nxtTilePoint1Lo   ; Hex 20 (Dec 32) is the amount of tiles in a single row on the screen
 
   LDA tilePointer1Hi
   SBC #$00            
-  STA tilePointer1Hi   ; Add the carry bit to the high byte address
+  STA nxtTilePoint1Hi   ; Add the carry bit to the high byte address
 
   LDA square1
   ORA #%00000010
-  STA square1          ; set the square to the one on the bottom of the tile, same column
+  STA nxtSquare1          ; set the square to the one on the bottom of the tile, same column
 
   JMP UpdateLocationDone
 
@@ -241,15 +253,15 @@ NextTileDown:
   CLC
   LDA tilePointer1Lo
   ADC #$20             
-  STA tilePointer1Lo   ; Hex 20 (Dec 32) is the amount of tiles in a single row on the screen
+  STA nxtTilePoint1Lo   ; Hex 20 (Dec 32) is the amount of tiles in a single row on the screen
 
   LDA tilePointer1Hi
   ADC #$00            
-  STA tilePointer1Hi   ; Add the carry bit to the high byte address
+  STA nxtTilePoint1Hi   ; Add the carry bit to the high byte address
 
   LDA square1
   AND #%00000001
-  STA square1          ; set the square to the one on the top of the tile, same column
+  STA nxtSquare1          ; set the square to the one on the top of the tile, same column
 
   JMP UpdateLocationDone
 
@@ -257,15 +269,15 @@ NextTileLeft:
   SEC
   LDA tilePointer1Lo
   SBC #$01
-  STA tilePointer1Lo
+  STA nxtTilePoint1Lo
 
   LDA tilePointer1Hi
   SBC #$00            
-  STA tilePointer1Hi   ; Add the carry bit to the high byte address
+  STA nxtTilePoint1Hi   ; Add the carry bit to the high byte address
 
   LDA square1
   ORA #%00000001
-  STA square1          ; set the square to the one on the right of the tile, same height
+  STA nxtSquare1          ; set the square to the one on the right of the tile, same height
 
   JMP UpdateLocationDone 
 
@@ -273,15 +285,15 @@ NextTileRight:
   CLC
   LDA tilePointer1Lo
   ADC #$01
-  STA tilePointer1Lo
+  STA nxtTilePoint1Lo
 
   LDA tilePointer1Hi
   ADC #$00             
-  STA tilePointer1Hi   ; Add the carry bit to the high byte address
+  STA nxtTilePoint1Hi   ; Add the carry bit to the high byte address
 
   LDA square1
   AND #%00000010
-  STA square1          ; set the square to the one on the left of the tile, same height
+  STA nxtSquare1          ; set the square to the one on the left of the tile, same height
 
 UpdateLocationDone:
 
