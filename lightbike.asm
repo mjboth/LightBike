@@ -48,8 +48,9 @@ grid        .rs 1279 ; stores the tile information in a 1279 byte (0x4FF) array,
 
 ;; DECLARE SOME CONSTANTS HERE
 STATETITLE     = $00  ; displaying title screen
-STATEPLAYING   = $01  ; move paddles/bike, check for collisions
+STATEPLAYING   = $01  ; move bike, update screen, check for collisions
 STATEGAMEOVER  = $02  ; displaying game over screen
+STATECRASH     = $03  ; round is over, breifly pauses the game before the next round starts  
   
 RIGHTWALL      = $F5  ; when bike reaches one of these, do something
 TOPWALL        = $18
@@ -229,7 +230,7 @@ NMI:
   JMP UpdateDone
 
 UpdateGrid:
-  JSR vblankwait       ; if the PPU is currently rendering the next frame, let it finish
+  JSR vblankwait           ; if the PPU is currently rendering the next frame, let it finish
   JSR DisableRendering
 
   CLC
@@ -318,6 +319,9 @@ GameEngine:
   LDA gamestate
   CMP #STATEPLAYING
   BEQ EnginePlaying    ;;game is playing
+
+  JMP PlayerCrash      ;;the only other condition is that the player crashed into a wall
+                       ;;
 GameEngineDone:  
   
   JSR UpdateSprites    ;;set bike/paddle sprites from positions
@@ -460,13 +464,31 @@ MoveDone:
   JMP CrashDone
 
 Crash:
-  JSR SetUp              ;; place the bikes in their original position
-
-  LDA #$02
-  STA flag
+  JSR Crashed
 CrashDone:
 
   JMP GameEngineDone
+
+
+;;;;;;;;;;;
+
+PlayerCrash:
+  LDA wait
+  BEQ CrashWaitOver
+  DEC wait
+  JMP GameEngineDone
+
+CrashWaitOver:
+  LDA #STATEPLAYING
+  STA gamestate
+
+  JSR SetUp              ;; place the bikes in their original position, resets the grid
+
+  LDA #$02
+  STA flag               ;; tells the game to reset the backround next NMI interupt
+
+  JMP GameEngineDone
+
 
 ;; End of the NMI Handler
 
@@ -484,7 +506,7 @@ CrashDone:
   .bank 1
   .org $E000
 palette:
-  .db $0F,$00,$12,$16,  $0F,$00,$12,$16,  $0F,$00,$12,$16,  $0F,$00,$12,$16   ;;background palette
+  .db $0F,$00,$21,$16,  $0F,$00,$21,$16,  $0F,$00,$21,$16,  $0F,$00,$21,$16   ;;background palette
   .db $0F,$02,$38,$3C,  $0F,$02,$38,$3C,  $0F,$02,$38,$3C,  $0F,$02,$38,$3C   ;;sprite palette
 
 sprites:

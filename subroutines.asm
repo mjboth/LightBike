@@ -101,9 +101,6 @@ SetUp:
   STA wait                ;;start the waiting timer for the next round
 
   LDA #$00
-  STA flag
-
-  LDA #$00
   STA currDir1           ;; clear the current direction
   STA nextDir1           ;; clear the next planned direction
   STA startDir1          ;; dont let the selected starting direction carryover into the next round
@@ -298,8 +295,51 @@ NextTileRight:
 UpdateLocationDone:
 
 CheckCrash:
+  CLC
+  LDA #LOW(grid)
+  STA pointerLo
+  LDA #HIGH(grid)
+  STA pointerHi
+
+  LDA #%00000011
+  LDX nxtSquare1
+SetNextTileOperator:
+  BEQ LocateNextGridTile
+  ASL A
+  ASL A
+  DEX
+  JMP SetNextTileOperator
+
+LocateNextGridTile:  
+  STA tileOperator
+  LDY nxtTilePoint1Lo
+  LDX nxtTilePoint1Hi
+LocateNextGridTileLoop:
+  BEQ FetchNextGridTile
+  INC pointerHi
+  DEX
+  JMP LocateNextGridTileLoop
+
+FetchNextGridTile:
+  LDA [pointerLo], y
+  AND tileOperator
+  BEQ TickDone
+
+  JSR Crashed
+
 TickDone:
 
+  RTS
+
+
+;;;;;;;;;;;;;;;
+
+Crashed:
+  LDA #$50          ; set the wait counter
+  STA wait
+
+  LDA #STATECRASH   ; post-game wait, pauses everything to show who crashed.
+  STA gamestate
   RTS
 
 
