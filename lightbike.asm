@@ -33,9 +33,12 @@ heldDir1    .rs 1    ; keep player 1 going in the same direction if the button i
 startDir1   .rs 1    ; lets player 1 decide which direction to start out in
 score1      .rs 1    ; player 1 score, 0-15
 score2      .rs 1    ; player 2 score, 0-15
+whoCrashed  .rs 1    ; idenifies if player1, player2, or both crashed this round, used to update the scoreboard
 wait        .rs 1    ; used to pause the game briefly after a crash
 flag        .rs 1    ; used at the start of NMI to tell the program its time to update the background in the PPU
 tileOperator .rs 1
+attributes1 .rs 1    ; used to label  the attributes (direction & color) of the bike1 sprite
+attributes2 .rs 1    ; used to label  the attributes (direction & color) of the bike2 sprite
 
   .rsset $0300  ;;start the remaining variables at ram location 0x0300, this is because the stack is located at
                 ;;0x01FF so the following variables would overwrite the stack
@@ -160,25 +163,25 @@ LoadSpritesLoop:
   LDA sprites, x           ; load data from address (sprites +  x)
   STA $0200, x             ; store into RAM address ($0200 + x)
   INX                      ; X = X + 1
-  CPX #$04                 ; Compare X to hex $10, decimal 16
+  CPX #$08                 ; Compare X to hex $10, decimal 16
   BNE LoadSpritesLoop      ; Branch to LoadSpritesLoop if compare was Not Equal to zero
                            ; if compare was equal to 16, keep going down
 
   JSR LoadBackground
 
-;LoadAttribute:
-;  LDA $2002               ; read PPU status to reset the high/low latch
-;  LDA #$23
-;  STA $2006               ; write the high byte of $23C0 address
-;  LDA #$C0
-;  STA $2006               ; write the low byte of $23C0 address
-;  LDX #$00                ; start out at 0
-;LoadAttributeLoop:
-;  LDA attribute, x        ; load data from address (attribute + the value in x)
-;  STA $2007               ; write to PPU
-;  INX                     ; X = X + 1
-;  CPX #$08                ; Compare X to hex $08, decimal 8 - copying 8 bytes
-;  BNE LoadAttributeLoop   ; Branch to LoadAttributeLoop if compare was Not Equal to zero
+LoadAttribute:
+  LDA $2002               ; read PPU status to reset the high/low latch
+  LDA #$23
+  STA $2006               ; write the high byte of $23C0 address
+  LDA #$C0
+  STA $2006               ; write the low byte of $23C0 address
+  LDX #$00                ; start out at 0
+LoadAttributeLoop:
+  LDA attribute, x        ; load data from address (attribute + the value in x)
+  STA $2007               ; write to PPU
+  INX                     ; X = X + 1
+  CPX #$08                ; Compare X to hex $08, decimal 8 - copying 8 bytes
+  BNE LoadAttributeLoop   ; Branch to LoadAttributeLoop if compare was Not Equal to zero
                            ; if compare was equal to 128, keep going down
   
 
@@ -199,18 +202,23 @@ Begin:
   JSR EnableRendering              
 
 Forever:
-  JMP Forever          ; jump back to Forever, infinite loop, waiting for NMI
+  LDA flag
+  CMP #$03
+  BEQ StartOver
+  JMP Forever          ; jump back to Forever, infinite loop, waiting for NMI or for a reset flag to be set
+
+StartOver:
+  JMP RESET
 
 ;; End of the RESET HANDLER
  
 
 NMI:
+;; All background drawing and updates must be handled at the start of the NMI interrupt
   LDA #$00
   STA $2003            ; set the low byte (00) of the RAM address
   LDA #$02
   STA $4014            ; set the high byte (02) of the RAM address, start the transfer
-
-  JSR DrawScore
 
   ;;This is the PPU clean up section, so rendering the next frame starts properly.
   LDA #%10010000       ; enable NMI, sprites from Pattern Table 0, background from Pattern Table 1
@@ -320,7 +328,7 @@ GameEngine:
   CMP #STATEPLAYING
   BEQ EnginePlaying    ;;game is playing
 
-  JMP PlayerCrash      ;;the only other condition is that the player crashed into a wall
+  JMP EnginePlayerCrash      ;;the only other condition is that the player crashed into a wall
                        ;;
 GameEngineDone:  
   
@@ -345,13 +353,16 @@ EngineTitle:
 ;;;;;;;;; 
  
 EngineGameOver:
-  ;;if start button pressed
-  ;;  turn screen off
-  ;;  load title screen
-  ;;  go to Title State
-  ;;  turn screen on 
+  LDA wait
+  BEQ GameOverWaitOver
+  DEC wait               ;; decrement the wait counter after every NMI interupt
   JMP GameEngineDone
  
+GameOverWaitOver:        ;; reset the game
+  LDA #$03 
+  STA flag
+
+  RTI
 ;;;;;;;;;;;
  
 EnginePlaying:
@@ -359,7 +370,7 @@ EnginePlaying:
   BEQ Playing
 
 Waiting:
-  DEC wait               ;; decrement the wait counter after every NMI interupt
+  DEC wait                       ;; decrement the wait counter after every NMI interupt
 
 SetStartingDirection:            ;; the starting direction lets the player face any direction before the game begins
   LDA nextDir1                   ;; as opposed to next direction which will not accept 180 degree turns
@@ -472,7 +483,7 @@ CrashDone:
 
 ;;;;;;;;;;;
 
-PlayerCrash:
+EnginePlayerCrash:       ;; post-round wait 
   LDA wait
   BEQ CrashWaitOver
   DEC wait
@@ -484,11 +495,28 @@ CrashWaitOver:
 
   JSR SetUp              ;; place the bikes in their original position, resets the grid
 
+  INC score2
+
+
   LDA #$02
   STA flag               ;; tells the game to reset the backround next NMI interupt
 
+
+  LDA score2
+  CMP #$0F
+  BEQ Player2Wins        ;; if player2 reaches a score of 15 points, they win
+
   JMP GameEngineDone
 
+
+Player2Wins:
+  LDA #STATEGAMEOVER
+  STA gamestate
+
+  LDA #$A0
+  STA wait
+
+  JMP GameEngineDone
 
 ;; End of the NMI Handler
 
@@ -506,23 +534,27 @@ CrashWaitOver:
   .bank 1
   .org $E000
 palette:
-  .db $0F,$00,$21,$16,  $0F,$00,$21,$16,  $0F,$00,$21,$16,  $0F,$00,$21,$16   ;;background palette
-  .db $0F,$02,$38,$3C,  $0F,$02,$38,$3C,  $0F,$02,$38,$3C,  $0F,$02,$38,$3C   ;;sprite palette
+  .db $0F,$00,$21,$28,  $0F,$00,$28,$21,  $0F,$00,$21,$28,  $0F,$00,$21,$28   ;;background palette
+  .db $0F,$00,$38,$3C,  $0F,$00,$38,$17,  $0F,$02,$38,$3C,  $0F,$00,$38,$05   ;;sprite palette
 
 sprites:
      ;vert tile attr horiz
-  .db $80, $28, $00, $80   ;sprite 0
-;  .db $08, $28, $00, $18   ;sprite 1  Need to load a second sprite soon
+  .db $18, $28, $00, $08   ;sprite 0     bike1
+  .db $D8, $28, $01, $F0   ;sprite 1     bike2
+
+;  .db $D8, $05, $01, $F0   ;sprite 2     TensScore1
+;  .db $D8, $05, $01, $F0   ;sprite 3     OnesScore1
 
 
 ;; an unchanging databank that stores what the background should look like at the start of each round
+
 background:
 
   .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 1
   .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;Blank (only seen on PAL Televisions)
 
-  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 2
-  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;Blank
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$B2,$B2,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 2
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$B2,$B2,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;ScoreBoard
 
   .db $B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0  ;;row 3
   .db $B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0,$B0  ;;TopWall
@@ -610,15 +642,30 @@ background:
 
 
 
+;; determines which color pallete (0 to 3) the tiles will use
+;; every 2 bits represents a 2x2 block of tiles, so each byte covers a 4x4 block of tiles
 
 attribute:
-  .db %00000000, %00010000, %01010000, %00010000, %00000000, %00000000, %00000000, %00110000
+  .db %00000101, %00000101, %00000101, %00000001, %00000000, %00000000, %00000000, %00000000 ;; Scoreboard, pallete 1 topleft
+                                                                                             ;; pallete 0 everywhere else
 
-  .db $24,$24,$24,$24, $24,$24,$24,$24 ,$24,$24,$24,$24, $24,$24,$24,$24 ,$24,$24,$24,$24 ,$24,$24,$24,$24, $24,$24,$24,$24, $24,$24,$24,$24  ;;brick bottoms
+  .db %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000 ;; Grid, pallete 0
 
-  .db %00000000, %00010000, %01010000, %00010000, %00000000, %00000000, %00000000, %00110000
+  .db %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000 ;; Grid, pallete 0
 
-  .db $24,$24,$24,$24, $47,$47,$24,$24 ,$47,$47,$47,$47, $47,$47,$24,$24 ,$24,$24,$24,$24 ,$24,$24,$24,$24, $24,$24,$24,$24, $55,$56,$24,$24  ;;brick bottoms
+  .db %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000 ;; Grid, pallete 0
+
+  .db %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000 ;; Grid, pallete 0
+
+  .db %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000 ;; Grid, pallete 0
+
+  .db %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000 ;; Grid, pallete 0
+
+  .db %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000 ;; Grid, pallete 0
+
+  .db %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000 ;; Grid, pallete 0
+
+  .db %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000 ;; Grid, pallete 0
 
 
 

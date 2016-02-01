@@ -13,8 +13,8 @@ UpdateSprites:
 ;  LDA #$40
 ;  STA $0201
   
-;  LDA #$00
-;  STA $0202
+  LDA attributes1
+  STA $0202
   
   LDA bikeX1
   STA $0203
@@ -52,14 +52,59 @@ InnerLoop:
   CPX #$04                 
   BNE OuterLoop            ; the outer loop has to run four times to fully draw the background
  LoadBackgroundDone:
+
+  JSR UpdateScore
+
   RTS
 
 
 ;;;;;;;;;;;;;;;
-DrawScore:
-  ;;draw score on screen using background tiles
-  ;;or using many sprites
-  RTS
+
+UpdateScore:               ;;update score on screen using background tiles             
+  LDA score2
+  CMP #$0A
+  BCS TwoDigits            ; if the player's score is greater than or equal to 10, skip the next part
+
+OneDigit:
+  LDA #$20
+  STA $2006
+  LDA #$38
+  STA $2006
+
+  LDA score2
+  CLC
+  ADC #$B2
+  STA $2007
+
+  JSR RestorePPUADDR
+
+  RTS                      ; return
+
+
+
+
+TwoDigits:
+
+UpdateTensDigit:
+  LDA #$20
+  STA $2006
+  LDA #$37
+  STA $2006
+
+  LDA #$B3                 ; set the tens digit to 1
+  STA $2007
+UpdateTensDigitDone:
+
+  LDA score2
+  SEC
+  SBC #$0A                 ; set the ones digit to [score2 - 10]
+  CLC
+  ADC #$B2                 ; add the offset for the tile's location in the PPU's tile memory
+  STA $2007                
+
+  JSR RestorePPUADDR
+
+  RTS                      ; return
  
  
 ;;;;;;;;;;;;;;;
@@ -104,6 +149,8 @@ SetUp:
   STA currDir1           ;; clear the current direction
   STA nextDir1           ;; clear the next planned direction
   STA startDir1          ;; dont let the selected starting direction carryover into the next round
+  STA square1            ;; set bike1 the a top left square of a tile
+  STA attributes1        ;; set bike1 to a light blue color
 
   LDA #$21
   STA tilePointer1Lo
@@ -113,9 +160,6 @@ SetUp:
   STA nxtTilePoint1Hi
   STA nxtSquare1
 
-  LDA #$00
-  STA square1
-
   ;; aligns the bike's screen location with the tile+square location
   LDA #$18
   STA bikeY1
@@ -123,6 +167,8 @@ SetUp:
   LDA #$08
   STA bikeX1
 
+
+  ;; clears the grid of all walls
   LDA #LOW(grid)
   STA pointerLo            ; put the low byte of the address of background into pointer
   LDA #HIGH(grid)
@@ -142,6 +188,8 @@ ResetGridInnerLoop:
   INX
   CPX #$04                 
   BNE ResetGridOuterLoop            ; the outer loop has to run four times to fully draw the background
+ResetGridDone:
+
 SetUpDone:
   RTS
 
@@ -234,11 +282,11 @@ NextTileUp:
   SEC
   LDA tilePointer1Lo
   SBC #$20
-  STA nxtTilePoint1Lo   ; Hex 20 (Dec 32) is the amount of tiles in a single row on the screen
+  STA nxtTilePoint1Lo     ; Hex 20 (Dec 32) is the amount of tiles in a single row on the screen
 
   LDA tilePointer1Hi
   SBC #$00            
-  STA nxtTilePoint1Hi   ; Add the carry bit to the high byte address
+  STA nxtTilePoint1Hi     ; Add the carry bit to the high byte address
 
   LDA square1
   ORA #%00000010
@@ -250,11 +298,11 @@ NextTileDown:
   CLC
   LDA tilePointer1Lo
   ADC #$20             
-  STA nxtTilePoint1Lo   ; Hex 20 (Dec 32) is the amount of tiles in a single row on the screen
+  STA nxtTilePoint1Lo     ; Hex 20 (Dec 32) is the amount of tiles in a single row on the screen
 
   LDA tilePointer1Hi
   ADC #$00            
-  STA nxtTilePoint1Hi   ; Add the carry bit to the high byte address
+  STA nxtTilePoint1Hi     ; Add the carry bit to the high byte address
 
   LDA square1
   AND #%00000001
@@ -270,7 +318,7 @@ NextTileLeft:
 
   LDA tilePointer1Hi
   SBC #$00            
-  STA nxtTilePoint1Hi   ; Add the carry bit to the high byte address
+  STA nxtTilePoint1Hi     ; Add the carry bit to the high byte address
 
   LDA square1
   ORA #%00000001
@@ -286,7 +334,7 @@ NextTileRight:
 
   LDA tilePointer1Hi
   ADC #$00             
-  STA nxtTilePoint1Hi   ; Add the carry bit to the high byte address
+  STA nxtTilePoint1Hi     ; Add the carry bit to the high byte address
 
   LDA square1
   AND #%00000010
@@ -340,6 +388,12 @@ Crashed:
 
   LDA #STATECRASH   ; post-game wait, pauses everything to show who crashed.
   STA gamestate
+
+WhoCrashed:
+  LDA attributes1
+  ORA #%00000011
+  STA attributes1   ;set the color of the player who crashed to red
+
   RTS
 
 
