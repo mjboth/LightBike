@@ -227,7 +227,7 @@ SetUp:
   STA currDir2           ;; repeat for player 2
   STA nextDir2
   STA startDir2
-  STA square2
+  
 
   STA attributes1        ;; set bike1 to a light blue color
 
@@ -241,7 +241,6 @@ SetUp:
   STA tilePointer1Hi
   STA nxtTilePoint1Hi
   STA nxtSquare1
-  STA nxtSquare2
 
   LDA #$3E
   STA tilePointer2Lo
@@ -249,6 +248,9 @@ SetUp:
   LDA #$03
   STA tilePointer2Hi
   STA nxtTilePoint2Hi
+  STA square2
+  STA nxtSquare2
+
 
   ;; aligns the bike's screen location with the tile+square location
   LDA #$18
@@ -257,10 +259,10 @@ SetUp:
   LDA #$08
   STA bikeX1
 
-  LDA #$D8
+  LDA #$DC
   STA bikeY2
 
-  LDA #$F0
+  LDA #$F4
   STA bikeX2
 
 
