@@ -18,7 +18,7 @@ lightbike.bat   - Windows executeable for assembling the source code with NESASM
 
 Summary:
 
-Lightbike is an action game where two player try to divert each other into crashing their bikes into walls created by the bikes.
+Lightbike is an action game where two player try to crash each others bikes into the walls they create.
 
 The Direction Pad buttons are the only controls used in this game.
 
