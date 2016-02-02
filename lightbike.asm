@@ -20,17 +20,31 @@ square1        .rs 1   ; used to tell which square on the tile player 1 is
 
 nxtTilePoint1Lo .rs 1  ; using current direction and location: determine the players next poisiton
 nxtTilePoint1Hi .rs 1  ; next position is used to determine if the next space is ocuppied and the player has crashed
-nxtSquare1       .rs 1  ;
+nxtSquare1      .rs 1  ;
 
-bikeX1      .rs 1    ; bike horizontal position
-bikeY1      .rs 1    ; bike vertical position
+tilePointer2Lo .rs 1   ; used to point at the tile where player 2 is (relative to the gridPointer)
+tilePointer2Hi .rs 1   ;
+square2        .rs 1   ; used to tell which square on the tile player 2 is
+
+nxtTilePoint2Lo .rs 1  ; using current direction and location: determine the players next poisiton
+nxtTilePoint2Hi .rs 1  ; next position is used to determine if the next space is ocuppied and the player has crashed
+nxtSquare2      .rs 1  ;
+
 bikeSpeed   .rs 1    ; bike speed per frame
+bikeX1      .rs 1    ; bike 1 horizontal position
+bikeY1      .rs 1    ; bike 1 vertical position
+bikeX2      .rs 1    ; bike 2 horizontal position
+bikeY2      .rs 1    ; bike 2 vertical position
 buttons1    .rs 1    ; player 1 gamepad buttons, one bit per button
 buttons2    .rs 1    ; player 2 gamepad buttons, one bit per button
 currDir1    .rs 1    ; player 1 current direction
 nextDir1    .rs 1    ; player 1 next direction
 heldDir1    .rs 1    ; keep player 1 going in the same direction if the button is held
 startDir1   .rs 1    ; lets player 1 decide which direction to start out in
+currDir2    .rs 1    ; player 2 current direction
+nextDir2    .rs 1    ; player 2 next direction
+heldDir2    .rs 1    ; keep player 2 going in the same direction if the button is held
+startDir2   .rs 1    ; lets player 2 decide which direction to start out in
 score1      .rs 1    ; player 1 score, 0-15
 score2      .rs 1    ; player 2 score, 0-15
 whoCrashed  .rs 1    ; idenifies if player1, player2, or both crashed this round, used to update the scoreboard
@@ -90,7 +104,7 @@ BOTRIGHT       = %11000000   ;;      |  (00) |  (00) |     2 x 2 squares
 
 ;; this is for square1/square2, which will state which square on a tile the player is currrently on
 ;; this will only need two bits of information whether the player is on a top(0) or bottom(1) square 
-;; and a left(0) or right(0) square
+;; and a left(0) or right(1) square
 TOPSQUARE      = %00000000
 BOTTOMSQUARE   = %00000010
 
@@ -182,7 +196,7 @@ LoadAttributeLoop:
   INX                     ; X = X + 1
   CPX #$08                ; Compare X to hex $08, decimal 8 - copying 8 bytes
   BNE LoadAttributeLoop   ; Branch to LoadAttributeLoop if compare was Not Equal to zero
-                           ; if compare was equal to 128, keep going down
+                          ; if compare was equal to 128, keep going down
   
 
 
@@ -211,7 +225,9 @@ StartOver:
   JMP RESET
 
 ;; End of the RESET HANDLER
+
  
+
 
 NMI:
 ;; All background drawing and updates must be handled at the start of the NMI interrupt
@@ -235,12 +251,24 @@ NMI:
   CMP #$02
   BEQ ResetGrid
 
+  JMP UpdateDone       ; if no flag was set, do nothing
+
+
+ResetGrid:
+  JSR vblankwait
+  JSR DisableRendering
+  JSR LoadBackground     ;; redraw the background in its original, clean state
+  JSR RestorePPUADDR     ;; reset the PPU address register so the next frame will render properly
+  JSR EnableRendering
   JMP UpdateDone
+
+
 
 UpdateGrid:
   JSR vblankwait           ; if the PPU is currently rendering the next frame, let it finish
   JSR DisableRendering
 
+Update1:
   CLC
   LDA #LOW(gridPointer)
   ADC tilePointer1Lo
@@ -264,40 +292,84 @@ UpdateGrid:
 
   LDA #%00000001
   LDX square1
-SetTileOperator:
-  BEQ LocateGridTile
+SetTileOperator1:
+  BEQ LocateGridTile1
   ASL A
   ASL A
   DEX
-  JMP SetTileOperator
+  JMP SetTileOperator1
 
-LocateGridTile:  
+LocateGridTile1:  
   STA tileOperator
   LDY tilePointer1Lo
   LDX tilePointer1Hi
-LocateGridTileLoop:
-  BEQ FetchGridTile
+LocateGridTileLoop1:
+  BEQ FetchGridTile1
   INC pointerHi
   DEX
-  JMP LocateGridTileLoop
+  JMP LocateGridTileLoop1
 
-FetchGridTile:
+FetchGridTile1:
   LDA [pointerLo], y
   ORA tileOperator
-  STA [pointerLo],y
+  STA [pointerLo], y
 
   STA $2007                ; copy one background byte
+UpdateDone1:
+
+
+Update2:
+  CLC
+  LDA #LOW(gridPointer)
+  ADC tilePointer2Lo
+  STA pointerLo
+  LDA #HIGH(gridPointer)
+  ADC tilePointer2Hi
+  STA pointerHi
+
+  LDA $2002                ; read PPU status to reset the high/low latch
+  LDA pointerHi
+  STA $2006                ; write the high byte of backgroud tile address
+  LDA pointerLo
+  STA $2006                ; write the low byte of background tile address, set to $2061 now for debugging reasons
+
+
+  CLC
+  LDA #LOW(grid)
+  STA pointerLo
+  LDA #HIGH(grid)
+  STA pointerHi
+
+  LDA #%00000010
+  LDX square2
+SetTileOperator2:
+  BEQ LocateGridTile2
+  ASL A
+  ASL A
+  DEX
+  JMP SetTileOperator2
+
+LocateGridTile2:  
+  STA tileOperator
+  LDY tilePointer2Lo
+  LDX tilePointer2Hi
+LocateGridTileLoop2:
+  BEQ FetchGridTile2
+  INC pointerHi
+  DEX
+  JMP LocateGridTileLoop2
+
+FetchGridTile2:
+  LDA [pointerLo], y
+  ORA tileOperator
+  STA [pointerLo], y
+
+  STA $2007                ; copy one background byte
+UpdateDone2:
+
+
 
   JSR RestorePPUADDR
-  JSR EnableRendering
-
-  JMP UpdateDone
-
-ResetGrid:
-  JSR vblankwait
-  JSR DisableRendering
-  JSR LoadBackground     ;; redraw the background in its original, clean state
-  JSR RestorePPUADDR     ;; reset the PPU address register so the next frame will render properly
   JSR EnableRendering
 UpdateDone:
 
@@ -310,7 +382,7 @@ UpdateDone:
 
 ReadControllers:
   JSR ReadController1  ;;get the current button data for player 1
-; JSR ReadController2  ;;get the current button data for player 2
+  JSR ReadController2  ;;get the current button data for player 2
 ReadControllersDone:
 
 
@@ -372,111 +444,246 @@ EnginePlaying:
 Waiting:
   DEC wait                       ;; decrement the wait counter after every NMI interupt
 
-SetStartingDirection:            ;; the starting direction lets the player face any direction before the game begins
-  LDA nextDir1                   ;; as opposed to next direction which will not accept 180 degree turns
-  BEQ SetStartingDirectionDone   ;; if no directional button was pressed, do not overwrite a starting direction with zero
+
+  LDA score1
+  CMP #$0F
+  BEQ Player1Wins        ;; if player1 reaches a score of 15 points, they win
+
+  LDA score2
+  CMP #$0F
+  BEQ Player2Wins        ;; if player2 reaches a score of 15 points, they win
+
+
+
+SetStartingDirection1:            ;; the starting direction lets the player face any direction before the game begins
+  LDA nextDir1                    ;; as opposed to next direction which will not accept 180 degree turns
+  BEQ SetStartingDirection1Done   ;; if no directional button was pressed, do not overwrite a starting direction with zero
   STA startDir1                  
   LDA #$00
   STA nextDir1 
-SetStartingDirectionDone:
+SetStartingDirection1Done:
+
+SetStartingDirection2:           
+  LDA nextDir2                   
+  BEQ SetStartingDirection2Done
+  STA startDir2                  
+  LDA #$00
+  STA nextDir2 
+SetStartingDirection2Done:
 
   LDA wait
   BNE WaitDone           ;; if we are still waiting, ignore the next part
 
+WaitingOver:             ;; the pre-round wait is over, store the starting directions as the current directions
+
+SetDirection1:
   LDA startDir1
   STA currDir1           ;; set the starting direction to the current direction
-  BNE WaitDone
+  BNE SetDirection1Done
 
   LDA #RIGHT             ;; if player 1 did not request a starting direction - send them right
   STA currDir1
+SetDirection1Done:
+
+SetDirection2:
+  LDA startDir2
+  STA currDir2           ;; set the starting direction to the current direction
+  BNE SetDirection2Done
+
+  LDA #LEFT             ;; if player 1 did not request a starting direction - send them right
+  STA currDir2
+SetDirection2Done:
+
+
 WaitDone:
   JMP GameEngineDone
+
+
+Player1Wins:
+  LDA #STATEGAMEOVER
+  STA gamestate
+
+  LDA #$A0
+  STA wait
+
+  JMP GameEngineDone
+
+Player2Wins:
+  LDA #STATEGAMEOVER
+  STA gamestate
+
+  LDA #$A0
+  STA wait
+
 
 
 Playing:
   DEC flag
 
-  LDA bikeX1             ; will not let the bike change direction unless it has finished moving onto a square
+  LDA bikeX1             ; will not let the bikes change direction unless they have finished moving onto a square
   AND #%00000011
-  BNE MoveBikeUp
+  BNE MoveBike1Up
   LDA bikeY1
   AND #%00000011           
-  BNE MoveBikeUp
+  BNE MoveBike1Up
 
   JSR Tick
 
 
 
-MoveBikeUp:
+MoveBike1Up:
   LDA currDir1
   CMP #UP
-  BNE MoveBikeUpDone     ;;if bike is not moving up, skip this section
+  BNE MoveBike1UpDone      ;;if bike is not moving up, skip this section
 
   LDA bikeY1
   SEC
-  SBC bikeSpeed          ;;bikeY1 position = bikeY1 - bikeSpeed
+  SBC bikeSpeed            ;;bikeY1 position = bikeY1 - bikeSpeed
   STA bikeY1
+  JMP Move1Done
+MoveBike1UpDone:
 
-  LDA bikeY1
-  CMP #TOPWALL
-  BCC Crash              ;;if bike y > top wall, still on screen, skip next section
-  JMP MoveDone
-MoveBikeUpDone:
-
-MoveBikeDown:
+MoveBike1Down:
   LDA currDir1
   CMP #DOWN
-  BNE MoveBikeDownDone   ;;if bike is not moving down, skip this section
+  BNE MoveBike1DownDone    ;;if bike is not moving down, skip this section
 
   LDA bikeY1
   CLC
-  ADC bikeSpeed          ;;bikeY1 position = bikeY1 + bikeSpeed
+  ADC bikeSpeed            ;;bikeY1 position = bikeY1 + bikeSpeed
   STA bikeY1
+  JMP Move1Done
+MoveBike1DownDone:
+
+MoveBike1Left:
+  LDA currDir1
+  CMP #LEFT
+  BNE MoveBike1LeftDone    ;;if bike is not moving left, skip this section
+
+  LDA bikeX1
+  SEC
+  SBC bikeSpeed            ;;bikeX1 position = bikeX1 - bikeSpeed
+  STA bikeX1
+  JMP Move1Done
+MoveBike1LeftDone:
+
+MoveBike1Right:
+  LDA currDir1
+  CMP #RIGHT
+  BNE MoveBike1RightDone    ;;if bike is not moving right, skip this section
+
+  LDA bikeX1
+  CLC
+  ADC bikeSpeed            ;;bikeX1 position = bikeX1 + bikeSpeed
+  STA bikeX1
+MoveBike1RightDone:
+Move1Done:
+
+
+
+MoveBike2Up:
+  LDA currDir2
+  CMP #UP
+  BNE MoveBike2UpDone      ;;if bike is not moving up, skip this section
+
+  LDA bikeY2
+  SEC
+  SBC bikeSpeed            ;;bikeY2 position = bikeY2 - bikeSpeed
+  STA bikeY2
+MoveBike2UpDone:
+
+MoveBike2Down:
+  LDA currDir2
+  CMP #DOWN
+  BNE MoveBike2DownDone    ;;if bike is not moving down, skip this section
+
+  LDA bikeY2
+  CLC
+  ADC bikeSpeed            ;;bikeY2 position = bikeY2 + bikeSpeed
+  STA bikeY2
+  JMP Move2Done
+MoveBike2DownDone:
+
+MoveBike2Left:
+  LDA currDir2
+  CMP #LEFT
+  BNE MoveBike2LeftDone    ;;if bike is not moving left, skip this section
+
+  LDA bikeX2
+  SEC
+  SBC bikeSpeed            ;;bikeX2 position = bikeX2 - bikeSpeed
+  STA bikeX2
+  JMP Move2Done
+MoveBike2LeftDone:
+
+MoveBike2Right:
+  LDA currDir2
+  CMP #RIGHT
+  BNE MoveBike2RightDone   ;;if bike is not moving right, skip this section
+
+  LDA bikeX2
+  CLC
+  ADC bikeSpeed            ;;bikeX2 position = bikeX2 + bikeSpeed
+  STA bikeX2
+MoveBike2RightDone:
+Move2Done:
+
+
+
+
+CheckWalls:
+  LDA bikeY1
+  CMP #TOPWALL
+  BCC Crash1               ;;if bike1 y > top wall, skip next section
 
   LDA bikeY1
   CMP #BOTTOMWALL
-  BCS Crash              ;;if bike y < bottom wall, still on screen, skip next section
-  JMP MoveDone
-MoveBikeDownDone:
-
-MoveBikeLeft:
-  LDA currDir1
-  CMP #LEFT
-  BNE MoveBikeLeftDone   ;;if bike is not moving left, skip this section
-
-  LDA bikeX1
-  SEC
-  SBC bikeSpeed          ;;bikeX1 position = bikeX1 - bikeSpeed
-  STA bikeX1
+  BCS Crash1               ;;if bike1 y < bottom wall, skip next section
 
   LDA bikeX1
   CMP #LEFTWALL
-  BCC Crash              ;;if bike x > left wall, still on screen, skip next section
-  JMP MoveDone
-MoveBikeLeftDone:
-
-MoveBikeRight:
-  LDA currDir1
-  CMP #RIGHT
-  BNE MoveBikeRightDone  ;;if bike is not moving right, skip this section
-
-  LDA bikeX1
-  CLC
-  ADC bikeSpeed          ;;bikeX1 position = bikeX1 + bikeSpeed
-  STA bikeX1
+  BCC Crash1               ;;if bike1 x > left wall, skip next section
 
   LDA bikeX1
   CMP #RIGHTWALL
-  BCS Crash              ;;if bike x < right wall, still on screen, skip next section
-MoveBikeRightDone:
+  BCS Crash1               ;;if bike1 x < right wall, skip next section
 
-MoveDone:
+  JMP Crash1Done
+Crash1:
+  LDA whoCrashed
+  ORA #%00000001
+  STA whoCrashed
+Crash1Done:
 
-  JMP CrashDone
 
-Crash:
+  LDA bikeY2
+  CMP #TOPWALL
+  BCC Crash2               ;;if bike2 y > top wall, skip next section
+
+  LDA bikeY2
+  CMP #BOTTOMWALL
+  BCS Crash2               ;;if bike2 y < bottom wall, skip next section
+
+  LDA bikeX2
+  CMP #LEFTWALL
+  BCC Crash2               ;;if bike2 x > left wall, skip next section
+
+  LDA bikeX2
+  CMP #RIGHTWALL
+  BCS Crash2               ;;if bike2 x < right wall, skip next section
+
+  JMP Crash2Done
+Crash2:
+  LDA whoCrashed
+  ORA #%00000010
+  STA whoCrashed
+Crash2Done:
+
+  LDA whoCrashed
+  BEQ NoCrash
+
   JSR Crashed
-CrashDone:
+NoCrash:
 
   JMP GameEngineDone
 
@@ -490,31 +697,19 @@ EnginePlayerCrash:       ;; post-round wait
   JMP GameEngineDone
 
 CrashWaitOver:
+
   LDA #STATEPLAYING
   STA gamestate
 
   JSR SetUp              ;; place the bikes in their original position, resets the grid
 
-  INC score2
-
 
   LDA #$02
   STA flag               ;; tells the game to reset the backround next NMI interupt
 
-
-  LDA score2
-  CMP #$0F
-  BEQ Player2Wins        ;; if player2 reaches a score of 15 points, they win
-
   JMP GameEngineDone
 
 
-Player2Wins:
-  LDA #STATEGAMEOVER
-  STA gamestate
-
-  LDA #$A0
-  STA wait
 
   JMP GameEngineDone
 
@@ -541,9 +736,6 @@ sprites:
      ;vert tile attr horiz
   .db $18, $28, $00, $08   ;sprite 0     bike1
   .db $D8, $28, $01, $F0   ;sprite 1     bike2
-
-;  .db $D8, $05, $01, $F0   ;sprite 2     TensScore1
-;  .db $D8, $05, $01, $F0   ;sprite 3     OnesScore1
 
 
 ;; an unchanging databank that stores what the background should look like at the start of each round
@@ -580,7 +772,7 @@ background:
   .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 10
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
-  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 11
+  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 11 1
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
   .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 12
@@ -604,7 +796,7 @@ background:
   .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 18
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
-  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 19
+  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 19 2
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
   .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 20
@@ -619,16 +811,16 @@ background:
   .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 23
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
-  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row FF
+  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 24
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
-  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row B0
+  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 25
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
   .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 26
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
-  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 27
+  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 27 3
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
   .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 28
