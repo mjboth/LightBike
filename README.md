@@ -16,12 +16,13 @@ bike.chr        - hex code for drawing sprites and background tiles
 
 Summary:
 
-Lightbike is an action game where two player try to crash each others bikes into the walls they create.
+Lightbike is an homebrew NES action game where two player try to crash each others bikes into the walls they create.
 
 The Direction Pad buttons are the only controls used in this game.
 
 First to 15 wins.
 
 
+Assembled with NESASM3
 
 More updates and explanations coming soon.
