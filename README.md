@@ -1,7 +1,7 @@
 # LightBike
 A simple 2-Player action game for the NES
 
-Repo files:
+Files:
 
 lightbike.nes   - game ROM, open this in an NES emulator (not included in repo) to play the game.  This is all you need to play.
 
@@ -15,7 +15,9 @@ lightbike.bat   - Windows executeable for assembling the source code with NESASM
 
 
 
+
 Summary:
+
 Lightbike is an action game where two player try to divert each other into crashing their bikes into walls created by the bikes.
 
 The Direction Pad buttons are the only controls used in this game.
