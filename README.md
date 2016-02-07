@@ -40,6 +40,8 @@ D-Pad: Change directions
 
 When holding down a directional button, the game will remember the first button you held down.  While still holding that direction, you can then tap a button in any perpendicular direction and the game will then take priority with the second pressed button and snap towards the new direction for one square, then returning to the originally held direction.  This is great for performing quick turns when space is limited. 
 
+Before each round starts, the player can preset the direction they start out in.  The last direction button pressed will be the player's starting direction.
+
 You cannot Perform 180 degree turns while moving.  That would destroy the bike anyway.
 
 If both players crash at the same time, no one is awarded a point.
