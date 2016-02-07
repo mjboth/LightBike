@@ -10,6 +10,8 @@ Lightbike is an homebrew NES action game where two player try to crash each othe
 
 The Start button and the Direction Pad buttons are the only controls used in this game.
 
+This is strictly a 2-player game.
+
 First to 15 wins.
 
 
