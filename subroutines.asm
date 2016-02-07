@@ -10,9 +10,6 @@ UpdateSprites:
   LDA bikeY1             ;;update all bike1 sprite info
   STA $0200
   
-;  LDA #$40
-;  STA $0201
-  
   LDA attributes1
   STA $0202
   
@@ -22,9 +19,6 @@ UpdateSprites:
   LDA bikeY2             ;;update all bike2 sprite info
   STA $0204
   
-;  LDA #$40
-;  STA $0205
-  
   LDA attributes2
   STA $0206
   
@@ -32,6 +26,38 @@ UpdateSprites:
   STA $0207
   
   ;;update paddle sprites
+  RTS
+
+
+;;;;;;;;;;;;;;;
+
+LoadTitle:
+  LDA $2002                ; read PPU status to reset the high/low latch
+  LDA #$20
+  STA $2006                ; write the high byte of $2000 address
+  LDA #$00
+  STA $2006                ; write the low byte of $2000 address
+  LDX #$00                 ; start out at 0
+  LDY #$00
+
+  LDA #LOW(title)
+  STA pointerLo            ; put the low byte of the address of background into pointer
+  LDA #HIGH(title)
+  STA pointerHi            ; put the high byte of the address into pointer
+
+TitleOuterLoop:
+TitleInnerLoop:
+  LDA [pointerLo], y
+  STA $2007                ; copy one background byte
+  INY
+  CPY #$00                 ; increment the offset for the low byte pointer of the background.
+  BNE TitleInnerLoop            
+
+  INC pointerHi            ; increment the high byte pointer for the background
+  INX
+  CPX #$04                 
+  BNE TitleOuterLoop            ; the outer loop has to run four times to fully draw the background
+ LoadTitleDone:
   RTS
 
 
@@ -109,8 +135,6 @@ OneDigit1:
   ADC #$B2
   STA $2007
 
-  JSR RestorePPUADDR
-
   JMP Player2DrawScore
 
 TwoDigits1:
@@ -130,8 +154,6 @@ UpdateTensDigitDone1:
   CLC
   ADC #$B2                 ; add the offset for the tile's location in the PPU's tile memory
   STA $2007                
-
-  JSR RestorePPUADDR
 
 
 
@@ -213,6 +235,29 @@ RestorePPUADDR:
 
 ;;;;;;;;;;;;;;;
 
+;;;Set up the game after the title screen
+Begin:
+LoadSprites:
+  LDX #$00                 ; start at 0
+LoadSpritesLoop:
+  LDA sprites, x           ; load data from address (sprites +  x)
+  STA $0200, x             ; store into RAM address ($0200 + x)
+  INX                      ; X = X + 1
+  CPX #$08                 ; Compare X to hex $10, decimal 16
+  BNE LoadSpritesLoop      ; Branch to LoadSpritesLoop if compare was Not Equal to zero
+                           ; if compare was equal to 16, keep going down
+
+
+  JSR SetUp
+
+  LDA #$02
+  STA bikeSpeed            ; Set some initial bike stats  
+
+  RTS
+
+
+;;;;;;;;;;;;;;
+
 SetUp:
 
   LDA #$60
@@ -222,7 +267,6 @@ SetUp:
   STA currDir1           ;; clear the current direction
   STA nextDir1           ;; clear the next planned direction
   STA startDir1          ;; dont let the selected starting direction carryover into the next round
-  STA square1            ;; set bike1 the a top left square of a tile
 
   STA currDir2           ;; repeat for player 2
   STA nextDir2
@@ -234,35 +278,38 @@ SetUp:
   LDA #$01
   STA attributes2        ;; set bike2 to a light orange color
 
-  LDA #$21
+  LDA #$25
   STA tilePointer1Lo
   STA nxtTilePoint1Lo
-  LDA #$00
+  LDA #$01
   STA tilePointer1Hi
   STA nxtTilePoint1Hi
+  LDA #$00
+  STA square1
   STA nxtSquare1
 
-  LDA #$3E
+  LDA #$3B
   STA tilePointer2Lo
   STA nxtTilePoint2Lo
-  LDA #$03
+  LDA #$01
   STA tilePointer2Hi
   STA nxtTilePoint2Hi
+  LDA #$00
   STA square2
   STA nxtSquare2
 
 
   ;; aligns the bike's screen location with the tile+square location
-  LDA #$18
+  LDA #$58
   STA bikeY1
   
-  LDA #$08
+  LDA #$28
   STA bikeX1
 
-  LDA #$DC
+  LDA #$58
   STA bikeY2
 
-  LDA #$F4
+  LDA #$D8
   STA bikeX2
 
 
@@ -287,6 +334,9 @@ ResetGridInnerLoop:
   CPX #$04                 
   BNE ResetGridOuterLoop   ; the outer loop has to run four times to fully draw the background
 ResetGridDone:
+
+  LDA #$02
+  STA flag                 ;; tells the game to draw a clean backround next NMI interupt
 
 SetUpDone:
   RTS
@@ -734,6 +784,28 @@ ReadController1Loop:  ; stores the input from controller1 in a variable so it ca
   DEX
   BNE ReadController1Loop
 
+  RTS
+
+;;;;;;;;;;;;;;; 
+
+ReadController2:
+  LDA #$01
+  STA $4017
+  LDA #$00
+  STA $4017
+  LDX #$08
+ReadController2Loop:  ; stores the input from controller1 in a variable so it can be read multiple times
+  LDA $4017        
+  LSR A               ; bit0 -> Carry
+  ROL buttons2        ; bit0 <- Carry
+  DEX
+  BNE ReadController2Loop
+
+  RTS
+
+;;;;;;;;;;;;;;;
+
+Turn1:
 CheckHeld1:
   LDA heldDir1
   BEQ CheckAll1               ;; if there was no pressed button from last read (heldDir = 0), read all buttons
@@ -762,15 +834,15 @@ ReadHeld1:
 
   LDA nextDir1
   STA heldDir1                ;; if held button is no longer held, set second button (or zero in none) as the held button
-  JMP ReadController1Done
+  JMP ReadRightDone1
 
 StillHeld1:
   LDA nextDir1
-  BNE ReadController1Done     ;; if a second key was pressed, that takes priority over the held button
+  BNE ReadRightDone1     ;; if a second key was pressed, that takes priority over the held button
 
   LDA heldDir1
   STA nextDir1
-  JMP ReadController1Done     ;; if the held key is the only key pressed, set that as the next direction
+  JMP ReadRightDone1     ;; if the held key is the only key pressed, set that as the next direction
 
 
 
@@ -780,7 +852,7 @@ CheckAll1:
   JSR CheckHorz1
   LDA nextDir1
   STA heldDir1                ;; store any key pressed (or zero if none) as the held button
-  JMP ReadController1Done
+  JMP ReadRightDone1
 
 
 CheckVert1:
@@ -849,31 +921,16 @@ ReadRightDone1:       ; handling this button is done
 
 
 
-NoDirection1:
+NoDirection1:         ; if two opposing directions are held down, do not change direction
   LDA #$00
   STA nextDir1
+
   RTS
 
 
-ReadController1Done:
-  RTS
+;;;;;;;;;;;;;
 
-
-;;;;;;;;;;;;;;; 
-
-ReadController2:
-  LDA #$01
-  STA $4017
-  LDA #$00
-  STA $4017
-  LDX #$08
-ReadController2Loop:  ; stores the input from controller1 in a variable so it can be read multiple times
-  LDA $4017        
-  LSR A               ; bit0 -> Carry
-  ROL buttons2        ; bit0 <- Carry
-  DEX
-  BNE ReadController2Loop
-
+Turn2:
 CheckHeld2:
   LDA heldDir2
   BEQ CheckAll2                ;; if there was no pressed button from last read (heldDir = 0), read all buttons
@@ -902,15 +959,15 @@ ReadHeld2:
 
   LDA nextDir2
   STA heldDir2                ;; if held button is no longer held, set second button (or zero in none) as the held button
-  JMP ReadController2Done
+  JMP ReadRightDone2
 
 StillHeld2:
   LDA nextDir2
-  BNE ReadController2Done     ;; if a second key was pressed, that takes priority over the held button
+  BNE ReadRightDone2     ;; if a second key was pressed, that takes priority over the held button
 
   LDA heldDir2
   STA nextDir2
-  JMP ReadController2Done     ;; if the held key is the only key pressed, set that as the next direction
+  JMP ReadRightDone2     ;; if the held key is the only key pressed, set that as the next direction
 
 
 
@@ -920,7 +977,7 @@ CheckAll2:
   JSR CheckHorz2
   LDA nextDir2
   STA heldDir2                ;; store any key pressed (or zero if none) as the held button
-  JMP ReadController2Done
+  JMP ReadRightDone2
 
 
 CheckVert2:
@@ -992,8 +1049,5 @@ ReadRightDone2:        ; handling this button is done
 NoDirection2:
   LDA #$00
   STA nextDir2
-  RTS
 
-
-ReadController2Done:
   RTS
