@@ -49,13 +49,17 @@ score1      .rs 1    ; player 1 score, 0-15
 score2      .rs 1    ; player 2 score, 0-15
 whoCrashed  .rs 1    ; idenifies if player1, player2, or both crashed this round, used to update the scoreboard
 wait        .rs 1    ; used to pause the game briefly after a crash
-flag        .rs 1    ; used at the start of NMI to tell the program its time to update the background in the PPU
 tileOperator .rs 1
 attributes1 .rs 1    ; used to label  the attributes (direction & color) of the bike1 sprite
 attributes2 .rs 1    ; used to label  the attributes (direction & color) of the bike2 sprite
+flag        .rs 1    ; used at the start of NMI to tell the program if it's time to do something special:
+                     ; 0 - status normal
+                     ; 1 - Tick occured, time to update the grid and the background
+                     ; 2 - Player crashed, time to reset the grid and the background
+                     ; 3 - GameOver, reset the game
 
-  .rsset $0300  ;;start the remaining variables at ram location 0x0300, this is because the stack is located at
-                ;;0x01FF so the following variables would overwrite the stack
+  .rsset $0300  ;;start the remaining variables at ram location 0x0300, this is because the return stack is located at
+                ;;0x01FF so the following variables would overwrite the stored return addresses
 
 
 grid        .rs 1279 ; stores the tile information in a 1279 byte (0x4FF) array, this is because the MOS 6502,
@@ -171,17 +175,7 @@ LoadPalettesLoop:
   BNE LoadPalettesLoop     ; Branch to LoadPalettesLoop if compare was Not Equal to zero
                            ; if compare was equal to 32, keep going down
 
-LoadSprites:
-  LDX #$00                 ; start at 0
-LoadSpritesLoop:
-  LDA sprites, x           ; load data from address (sprites +  x)
-  STA $0200, x             ; store into RAM address ($0200 + x)
-  INX                      ; X = X + 1
-  CPX #$08                 ; Compare X to hex $10, decimal 16
-  BNE LoadSpritesLoop      ; Branch to LoadSpritesLoop if compare was Not Equal to zero
-                           ; if compare was equal to 16, keep going down
-
-  JSR LoadBackground
+  JSR LoadTitle
 
 LoadAttribute:
   LDA $2002               ; read PPU status to reset the high/low latch
@@ -197,20 +191,10 @@ LoadAttributeLoop:
   CPX #$08                ; Compare X to hex $08, decimal 8 - copying 8 bytes
   BNE LoadAttributeLoop   ; Branch to LoadAttributeLoop if compare was Not Equal to zero
                           ; if compare was equal to 128, keep going down
-  
-
-
-;;;Set some initial bike stats
-Begin:
-  
-  JSR SetUp
-  
-  LDA #$02
-  STA bikeSpeed
 
 
 ;;:Set starting game state
-  LDA #STATEPLAYING
+  LDA #STATETITLE
   STA gamestate
 
   JSR EnableRendering              
@@ -219,7 +203,7 @@ Forever:
   LDA flag
   CMP #$03
   BEQ StartOver
-  JMP Forever          ; jump back to Forever, infinite loop, waiting for NMI or for a reset flag to be set
+  JMP Forever             ; jump back to Forever, waiting for NMI interrupts or for a reset flag to be set
 
 StartOver:
   JMP RESET
@@ -414,12 +398,17 @@ GameEngineDone:
 ;;;;;;;;
  
 EngineTitle:
-  ;;if start button pressed
-  ;;  turn screen off
-  ;;  load game screen
-  ;;  set starting paddle/bike position
-  ;;  go to Playing State
-  ;;  turn screen on
+  LDA buttons1
+  ORA buttons2
+  AND #%00010000
+  BEQ EngineTitleDone  ; If start has not been pressed yet, do nothing
+
+  LDA #STATEPLAYING    ; otherwise, start the game
+  STA gamestate
+
+  JSR Begin
+
+EngineTitleDone:
   JMP GameEngineDone
 
 ;;;;;;;;; 
@@ -438,11 +427,14 @@ GameOverWaitOver:        ;; reset the game
 ;;;;;;;;;;;
  
 EnginePlaying:
+  JSR Turn1              ; check if player1 wants to turn
+  JSR Turn2              ; check if player2 wants to turn
+
   LDA wait
   BEQ Playing
 
 Waiting:
-  DEC wait                       ;; decrement the wait counter after every NMI interupt
+  DEC wait               ;; decrement the wait counter after every NMI interupt
 
 
   LDA score1
@@ -494,7 +486,6 @@ SetDirection2:
   STA currDir2
 SetDirection2Done:
 
-
 WaitDone:
   JMP GameEngineDone
 
@@ -517,8 +508,10 @@ Player2Wins:
 
 
 
+
 Playing:
-  DEC flag
+  LDA #$00
+  STA flag
 
   LDA bikeX1             ; will not let the bikes change direction unless they have finished moving onto a square
   AND #%00000011
@@ -528,8 +521,6 @@ Playing:
   BNE MoveBike1Up
 
   JSR Tick
-
-
 
 MoveBike1Up:
   LDA currDir1
@@ -703,10 +694,6 @@ CrashWaitOver:
 
   JSR SetUp              ;; place the bikes in their original position, resets the grid
 
-
-  LDA #$02
-  STA flag               ;; tells the game to reset the backround next NMI interupt
-
   JMP GameEngineDone
 
 
@@ -730,7 +717,7 @@ CrashWaitOver:
   .org $E000
 palette:
   .db $0F,$00,$21,$28,  $0F,$00,$28,$21,  $0F,$00,$21,$28,  $0F,$00,$21,$28   ;;background palette
-  .db $0F,$00,$38,$3C,  $0F,$00,$38,$17,  $0F,$02,$38,$3C,  $0F,$00,$38,$05   ;;sprite palette
+  .db $0F,$00,$38,$3C,  $0F,$00,$38,$37,  $0F,$02,$38,$3C,  $0F,$00,$38,$05   ;;sprite palette
 
 sprites:
      ;vert tile attr horiz
@@ -858,6 +845,101 @@ attribute:
   .db %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000 ;; Grid, pallete 0
 
   .db %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000, %00000000 ;; Grid, pallete 0
+
+
+
+title:
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 1
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;(only seen on PAL Televisions)
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 2
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 3
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 4
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 5
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 6
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$0F,$55,$1D,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 7
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$0E,$55,$1E,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 8
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$0D,$55,$1F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$0D,$1E,$FF  ;;row 9
+  .db $FF,$0D,$1E,$0F,$1C,$FF,$FF,$FF,$FF,$0D,$1E,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$0C,$1C,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$0C,$1F,$FF  ;;row 10
+  .db $FF,$0C,$1F,$0E,$1D,$FF,$FF,$FF,$FF,$0C,$1F,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$0F,$55,$1D,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$0F,$1C,$FF,$FF  ;;row 11
+  .db $0C,$55,$1D,$0D,$1E,$FF,$FF,$FF,$0F,$1C,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$0E,$55,$1E,$FF,$FF,$0F,$1C,$0E,$55,$55,$1C,$0E,$55,$55,$1D  ;;row 12
+  .db $0E,$1D,$FF,$0C,$55,$55,$1F,$FF,$0E,$1D,$0E,$1D,$0E,$2D,$1D,$FF  ;;
+
+  .db $FF,$0D,$55,$55,$55,$1C,$0E,$1D,$0D,$1E,$0D,$1D,$0D,$1E,$0D,$1E  ;;row 13
+  .db $0D,$1E,$0F,$1C,$0F,$1C,$0E,$1D,$0D,$55,$1C,$FF,$0D,$2C,$1E,$FF  ;;
+
+  .db $FF,$0C,$55,$55,$55,$1D,$0D,$1E,$0C,$55,$55,$1E,$0C,$1F,$0C,$1F  ;;row 14
+  .db $0C,$1F,$0E,$55,$55,$1D,$0D,$1E,$0C,$1F,$0C,$1F,$0C,$2E,$2F,$FF  ;;TitleBase
+
+  .db $FF,$3C,$3C,$3C,$3C,$3C,$3C,$4E,$FF,$0F,$55,$1F,$3C,$3C,$3C,$3C  ;;row 15
+  .db $3C,$3C,$3C,$3C,$3C,$3C,$3C,$3C,$3C,$3C,$3C,$3C,$3C,$3C,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$0E,$55,$55,$1C,$FF,$FF,$FF,$FF,$FF  ;;row 16
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$3E,$3C,$3C,$3C,$FF,$FF,$FF,$FF,$FF  ;;row 17
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 19
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 20
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$CB,$CD,$C0,$CE,$CE,$FF  ;;row 18
+  .db $FF,$CE,$CF,$BC,$CD,$CF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 21
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 22
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 23
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 26
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$B4,$D6,$CB,$C7,$BC,$D4,$C0,$CD,$FF,$BC  ;;row 24
+  .db $BE,$CF,$C4,$CA,$C9,$FF,$C2,$BC,$C8,$C0,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 27
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$C1,$C4,$CD,$CE,$CF,$FF,$CF,$CA  ;;row 25
+  .db $FF,$B3,$B7,$FF,$D2,$C4,$C9,$CE,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 28
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 29
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
+
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 30
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;(only seen on PAL Televisions)
+
 
 
 
