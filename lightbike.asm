@@ -229,6 +229,9 @@ NMI:
   STA $2005
   STA $2005
   
+  LDA gameState
+  CMP #$STATEGAMEOVER
+
   LDA flag             ; if the update flag was set (flag = 1), update the background
   CMP #$01
   BEQ UpdateGrid
@@ -424,6 +427,7 @@ GameOverWaitOver:        ;; reset the game
   STA flag
 
   RTI
+  
 ;;;;;;;;;;;
  
 EnginePlaying:
@@ -482,7 +486,7 @@ SetDirection2:
   STA currDir2           ;; set the starting direction to the current direction
   BNE SetDirection2Done
 
-  LDA #LEFT             ;; if player 1 did not request a starting direction - send them right
+  LDA #LEFT              ;; if player 1 did not request a starting direction - send them right
   STA currDir2
 SetDirection2Done:
 
@@ -497,6 +501,8 @@ Player1Wins:
   LDA #$A0
   STA wait
 
+  JSR DrawGameOver
+
   JMP GameEngineDone
 
 Player2Wins:
@@ -505,6 +511,10 @@ Player2Wins:
 
   LDA #$A0
   STA wait
+
+  JSR DrawGameOver
+
+  JMP GameEngineDone
 
 
 
