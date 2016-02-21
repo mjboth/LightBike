@@ -95,7 +95,7 @@ This determines which color pallete the tile will use.  Since thre are only 4 co
 [More information on NES hardware can be found here](http://nintendoage.com/forum/messageview.cfm?catid=22&threadid=4291)
 
 #### NES Variables
-------------------
+
 
 Variables can be assigned to take up as many bytes as needed and are often stored starting at address $0000.  PointerLo and PointerHi are both single byte variables used in **Indirect Indexing** which is critical for drawing backgrounds.
 
@@ -105,8 +105,11 @@ Variables can be assigned to take up as many bytes as needed and are often store
 The NES CPU is can only do 8 bit math and 16 bit addressing.  So if I were to place all 960 bytes of the background in the PPU using the psuedo-code
 
 > LOAD IN REGISTER A: TILE @ [BACKGROUND STARTING ADDRESS] + X
+
 > STORE REGISTER A TO: $2007 (ADDRESS OF PPU I/O PORT)
+
 > INCREMENT X
+
 > REPEAT UNTIL X IS 0
 
 The code would execute 256 times before X overflows back to 0, but Indirect Indexing lets us get around this by using 8 bit variables as one 16 bit variable.
@@ -121,16 +124,27 @@ First we load the address of the background to our pointer variables
 Then we create a nested loop that will store tiles from the stored background address
 
 > OuterLoop:
+
 > InnerLoop:
+
 >   LDA [pointerLo], y
+
 >   STA $2007                ; copy one background byte to the PPU I/O port
+
 >   INY                      ; increment the offset for the low byte pointer of the background.
+
 >   CPY #$00                 ; compare Y to 0
+
 >   BNE InnerLoop            ; jump if not equal
+
 >
+
 >   INC pointerHi            ; increment the high byte pointer for the background
+
 >   INX                      ; increment X
+
 >   CPX #$04                 ; compare X to 4
+
 >   BNE OuterLoop            ; jump if not equal, the outer loop has to run four times to fully draw the background
 
 When **LDA [pointerLo], y** is executed, it combines pointerLo and the variable behind it (which in this case is pointerHi) into one 16 bit address, then it uses Y as an offset. to fetch the specific byte if information we need.  When the inner loop runs 256 times, the outer loop will increment the high byte of the address, the outer loop will run 4 times for each time the inner loop finishes.  So 256 inner loop runs x 4 outer loop runs will give us 1024 total load then store commands, a little more than what we need, but this won't hurt the game.
