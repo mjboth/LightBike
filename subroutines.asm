@@ -48,15 +48,15 @@ LoadTitle:
 TitleOuterLoop:
 TitleInnerLoop:
   LDA [pointerLo], y
-  STA $2007                ; copy one background byte
-  INY
-  CPY #$00                 ; increment the offset for the low byte pointer of the background.
+  STA $2007                ; copy one background byte to the PPU IO port
+  INY                      ; increment the offset for the low byte pointer of the background.
+  CPY #$00
   BNE TitleInnerLoop            
 
   INC pointerHi            ; increment the high byte pointer for the background
   INX
   CPX #$04                 
-  BNE TitleOuterLoop            ; the outer loop has to run four times to fully draw the background
+  BNE TitleOuterLoop       ; the outer loop has to run four times to fully draw the background
  LoadTitleDone:
   RTS
 
