@@ -62,7 +62,7 @@ flag        .rs 1    ; used at the start of NMI to tell the program if it's time
                 ;;0x01FF so the following variables would overwrite the stored return addresses
 
 
-grid        .rs 1279 ; stores the tile information in a 1279 byte (0x4FF) array, this is because the MOS 6502,
+grid        .rs 1024 ; stores the tile information in a 1024 byte (0x0400) array, this is because the MOS 6502,
                      ; only handes 8 bit math, so we have to manually loop the call to grid 4 times 
 
 
@@ -229,8 +229,8 @@ NMI:
   STA $2005
   STA $2005
   
-  LDA gameState
-  CMP #$STATEGAMEOVER
+  LDA gamestate
+  CMP #STATEGAMEOVER
 
   LDA flag             ; if the update flag was set (flag = 1), update the background
   CMP #$01
@@ -501,8 +501,6 @@ Player1Wins:
   LDA #$A0
   STA wait
 
-  JSR DrawGameOver
-
   JMP GameEngineDone
 
 Player2Wins:
@@ -511,8 +509,6 @@ Player2Wins:
 
   LDA #$A0
   STA wait
-
-  JSR DrawGameOver
 
   JMP GameEngineDone
 
@@ -769,7 +765,7 @@ background:
   .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 10
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
-  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 11 1
+  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 11
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
   .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 12
@@ -793,7 +789,7 @@ background:
   .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 18
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
-  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 19 2
+  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 19
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
   .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 20
@@ -817,7 +813,7 @@ background:
   .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 26
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
-  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 27 3
+  .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 27
   .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$B0  ;;Grid
 
   .db $B0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ;;row 28
@@ -861,7 +857,7 @@ attribute:
 title:
 
   .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 1
-  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;(only seen on PAL Televisions)
+  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
 
   .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 2
   .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
@@ -947,8 +943,8 @@ title:
   .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 29
   .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;
 
-  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;row 30
-  .db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ;;(only seen on PAL Televisions)
+  .db $FF,$FF,$FF,$FF,$BE,$CD,$C0,$BC,$CF,$C0,$BF,$FF,$BD,$D4,$FF,$C8  ;;row 30
+  .db $C4,$BE,$C3,$BC,$C0,$C7,$FF,$BD,$CA,$CF,$C3,$FF,$FF,$FF,$FF,$FF  ;;
 
 
 
