@@ -1,5 +1,4 @@
-LightBike
-
+# LightBike
 ***
 
 A simple 2-Player action game for the NES
@@ -67,13 +66,13 @@ Each tile is 16 bytes large, where each byte represents a row of 8 pixels, and e
 
 This tile code is then stored onto the game cartridge, which gets stored as a **pattern table** on the PPU upon boot up.  The pattern table remembers the first 256 tiles stored as sprite tiles, and the remaining 256 as background tiles.
 
-The NES allows for at most, 64 spirte tiles to be used at once with no more than 8 sprite tiles occupying the same scanline at a time, while a simple background screen requires 32x30 tiles to be placed on screen.  These 960 tiles are stored as single byte references on the PPU in an area called the name table.  When it is time to refresh the screen, the PPU will read through the name table to see which background tiles occupy the name space, then it goes to that tile's location on the pattern table to read how to draw it.
+The NES allows for at most, 64 spirte tiles to be used at once with no more than 8 sprite tiles occupying the same scanline at a time, while a simple background screen requires 32x30 tiles to be placed on screen.  These 960 tiles are stored as single byte references on the PPU in an area called the **name table**.  When it is time to refresh the screen, the PPU will read through the name table to see which background tiles occupy the name space, then it goes to that tile's location on the pattern table to read how to draw it.
 
 [For more information on drawing sprites and tiles with color, I recommend watching this 7-minute video](https://www.youtube.com/watch?v=Tfh0ytz8S0k)
 
 ###### Color Palettes:
 
-The NES has up to 64 colors, but for the sake of memory efficiency, only remembers 32 at a time (16 for sprite tiles + 16 for background tiles).  These selected colors are divided up into groups of 4 to create a color palette which is used when determining how to color a tile.  Each palette also needs a universal background color shared by all palettes, including the sprite palettes, so all color palletes really have 3 freely picked colors + 1 designated background color.
+The NES has up to 64 colors, but for the sake of memory efficiency, only remembers 32 at a time (16 for sprite tiles + 16 for background tiles).  This **palette table** is divided up into groups of 4 to create a color palette which is used when determining how to color a tile.  Each palette also needs a universal background color shared by all palettes, including the sprite palettes, so all color palletes really have 3 freely picked colors + 1 designated background color.
 
 ###### Attributes:
 
@@ -86,7 +85,7 @@ This determines which color pallete the tile will use.  Since thre are only 4 co
 * **Color Palette** - 3 colors + the background color, 4 bytes large
 * **Attributes** - declares which color palette to use for 1 Sprite Tile or 4x4 Backrgound Tiles, 1 byte large
 
-With the following stored in the PPU:
+##### With the following stored in the PPU:
 
 * **Pattern Table** - The Sprite/Pixel Sheet, 256 Sprite Tiles + 256 Background Tiles, 8 KB large
 * **Name Table** - The Background, 32x30 single byte references to the Background Tiles section of the Pattern Table, 960 bytes large.  The PPU holds 4 Name Tables used for scrolling the background (This game does not use scrolling, so we only need to use one).
@@ -156,7 +155,14 @@ When **LDA [pointerLo], y** is executed, it combines pointerLo and the variable 
 Pointers used for Indirect Indexing must be stored in the zero page of the CPU's RAM [Address $0000 - $00FF] and the Y register must be the one used for calculating the offset from the pointer's address.
 
 
-####### The Grid:
+###### The Stack:
+
+The Stack begins at address $01FF and grows downward towards where I have my variables stored [Address $0000+].  It only stores one thing: return addresses.  Everytime Jump to Subroutine (JSR [Label]) is used, it stores the Program Counter's value into the stack, decreases the stack pointer by 2 bytes, then jumps the PC to the location of the label.  When Return from Subroutine (RTS) is read it pops two bytes off the stack, places them in the Program Counter, then increments the stack pointer by 2 bytes.  It's the 6502's version of call and return commands used in x86 assembly today.
+
+This is important because I needed to create a variable of at least 1024 bytes in size (0x0400) to represent the current state of the **grid** (more on this later).  However, creating this variable as the same relative location as the other variables [Starting Address $0000] would result in overwriting the stack [Address $01FF].  So I had to relocate the grid array to begin at Address $0300 instead.  I couldn't move all the variables to that location as **pointerLo** and **pointerHi** need to reamin in the zero-page [Addresses $0000 - $00FF] to perform indirect indexing.
+
+
+###### The Grid:
 
 The playing field for this game is a grid drawn in the background using only background tiles.  For this reason, I needed to create grid as a variable so The game can keep an eye on the sate of the game (which walls go where), while also updating the PPU telling it what to store in the Name Table.
 
@@ -165,7 +171,7 @@ The grid makes up 27x32 tiles out of the 30x32 tiles that creates the background
 Example: if player 1 was moving onto the bottom left square of a tile that has both of its right squares covered by player 2.  The game would fetch the tile information from grid and get the following binary code [10 00 10 00], it would then check to see if the bottom left square was open (00), see that it is, set these bits to (01) and write the new byte [10 01 10 00] back to the grid then store the exact same byte to the tile's location in the PPU so the background will be updated the next time it is redrawn.  If the square was represented by any number other than 0, the game would declare that player 1 crashed and reset the grid.
 
 
-####### Bike Location:
+###### Bike Location:
 
 Used to determine the location for each bike relative to the first tile of the grid.  2 pointer variables for each bike stores which grid tile the bike is on with a high byte address and a low byte address.  Then a third variable declares which specific square on the tile is the bike located on.  The location of the next tile & square the bike will be on is used to determine if the bike is trying to move into a wall.  It's calculated using the bike's current location combined to the direction the bike is moving.
 
@@ -174,12 +180,6 @@ This also sloved a major problem with the NES hardware.
 The PPU runs on its own clock speed, and will refresh the background when it wants to (60 times per second on NTSC). In addition, I cannot write directly to the PPU, I can only effectively change the **PPU Address Register** (by writing 2 bytes to Address $2006) then send a single byte value to the PPU [Address $2007], which will store the value whereever the address register is currently pointing.  Due to these two factors, the PPU cannot reload the entire background when it needs to update how the grid will look.  If we were to try, I would need to use the PPU address register to point to the Name Table while I send it the tile information to draw, and then repeat this step 1024 times since that's how many times the nested loop runs.  Before the nested loop would be half finished, the PPU would take back control of its address register and start moving it around to redraw the entire screen while the CPU is still trying to update the Name Table with more tile information.  The PPU address register gets out of sync with both the CPU and PPU changing it at the same time, and the screen gets torn apart everytime it refreshes.
 
 To fix this, the CPU onlys update the Name Table tile that a bike is located on instead of updating the entire 960 byte table everytime.  Using the pointer variables that store the bike's location on the grid, the PPU address register is set to point at that tile's location in the PPU.  Then the tile needed is fetched from grid, gets shipped off to the PPU, and the PPU address register gets set back to its original value. A single tile is updated and the screen doesn't flicker anymore.
-
-####### The Stack:
-
-The Stack begins at address $01FF and grows downward towards where I have my variables stored [Address $0000+].  It only stores one thing: return addresses.  Everytime Jump to Subroutine (JSR [Label]) is used, it stores the Program Counter's value into the stack, decreases the stack pointer by 2 bytes, then jumps the PC to the location of the label.  When Return from Subroutine (RTS) is read it pops two bytes off the stack, places them in the Program Counter, then increments the stack pointer by 2 bytes.  It's the 6502's version of call and return commands used in x86 assembly today.
-
-This is important because I needed to create a variable of at least 1024 bytes in size (0x0400) to represent the current state of the **grid** (more on this later).  However, creating this variable as the same relative location as the other variables [Starting Address $0000] would result in overwriting the stack [Address $01FF].  So I had to relocate the grid array to begin at Address $0300 instead.  I couldn't move all the variables to that location as **pointerLo** and **pointerHi** need to reamin in the zero-page [Addresses $0000 - $00FF] to perform indirect indexing.
 
 
 
