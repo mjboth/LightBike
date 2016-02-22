@@ -1,5 +1,5 @@
 LightBike
-===
+---
 A simple 2-Player action game for the NES
 
 
@@ -183,8 +183,4 @@ This is important because I needed to create a variable of at least 1024 bytes i
 
 ## Coming Soon
 
-<<<<<<< HEAD
 I intend to add sound and simplify some of the code, but there are no plans to add an single player mode with an enemy bot.
-=======
-More details on how my game works coming soon
->>>>>>> origin/master
