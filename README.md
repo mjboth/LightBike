@@ -116,8 +116,11 @@ The code would execute 256 times before X overflows back to 0, but Indirect Inde
 First we load the address of the background to our pointer variables
 
 >  LDA #LOW(background)
+
 >  STA pointerLo            ; put the low byte of the address of background into pointer
+
 >  LDA #HIGH(background)
+
 >  STA pointerHi            ; put the high byte of the address into pointer
 
 Then we create a nested loop that will store tiles from the stored background address
@@ -180,4 +183,8 @@ This is important because I needed to create a variable of at least 1024 bytes i
 
 ## Coming Soon
 
+<<<<<<< HEAD
 I intend to add sound and simplify some of the code, but there are no plans to add an single player mode with an enemy bot.
+=======
+More details on how my game works coming soon
+>>>>>>> origin/master
