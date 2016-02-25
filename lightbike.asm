@@ -52,11 +52,17 @@ wait        .rs 1    ; used to pause the game briefly after a crash
 tileOperator .rs 1
 attributes1 .rs 1    ; used to label  the attributes (direction & color) of the bike1 sprite
 attributes2 .rs 1    ; used to label  the attributes (direction & color) of the bike2 sprite
+
+argument1   .rs 1    ; used to temporarily store values for subroutine calls
+argument2   .rs 1
+operator    .rs 1
+
 flag        .rs 1    ; used at the start of NMI to tell the program if it's time to do something special:
                      ; 0 - status normal
                      ; 1 - Tick occured, time to update the grid and the background
                      ; 2 - Player crashed, time to reset the grid and the background
                      ; 3 - GameOver, reset the game
+
 
   .rsset $0300  ;;start the remaining variables at ram location 0x0300, this is because the return stack is located at
                 ;;0x01FF so the following variables would overwrite the stored return addresses
@@ -431,8 +437,34 @@ GameOverWaitOver:        ;; reset the game
 ;;;;;;;;;;;
  
 EnginePlaying:
-  JSR Turn1              ; check if player1 wants to turn
-  JSR Turn2              ; check if player2 wants to turn
+
+  LDX nextDir1            ;; load arguments
+  LDY heldDir1
+  LDA buttons1
+  STA argument1
+  LDA currDir1
+  STA argument2
+
+  JSR ReadTurn            ;; check if player 1 wants to turn
+
+  STX nextDir1            ;; store returned values
+  STY heldDir1
+
+
+  LDX nextDir2            ;; load arguments
+  LDY heldDir2 
+  LDA buttons2
+  STA argument1
+  LDA currDir2
+  STA argument2
+
+  JSR ReadTurn            ;; check if player 2 wants to turn
+
+  STX nextDir2            ;; store returned values
+  STY heldDir2
+
+
+
 
   LDA wait
   BEQ Playing

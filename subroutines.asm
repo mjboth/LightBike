@@ -108,97 +108,72 @@ UpdateScore:               ;;update score on screen using background tiles
 
 
 Draw:
-  JMP Player1DrawScore     ; settle the round as a draw (no points) if both players crashed
+  JMP IncrementScoreDone     ; settle the round as a draw (no points) if both players crashed
 Player1Point:
   INC score1
-  JMP Player1DrawScore
+  JMP IncrementScoreDone
 Player2Point:
   INC score2
+IncrementScoreDone:
+
+  LDX score1                   ; load player 1 score
+  LDY #$27                     ; low byte address of player 1 scoreboard in the PPU name table
+  JSR DrawScore
+
+  LDX score2                   ; load player 2 score
+  LDY #$37                     ; low byte address of player 2 scoreboard in the PPU name table
+  JSR DrawScore
+
+  JSR RestorePPUADDR
+  RTS
 
 
-Player1DrawScore:
+;;;;;;;;;;;;;;;
+
+;; X - player score
+;; Y - low byte address of the player score on the background
+
+DrawScore:
   LDA #$00
   STA whoCrashed
 
-  LDA score1
+  TXA
   CMP #$0A
-  BCS TwoDigits1            ; if the player's score is greater than or equal to 10, skip the next part
+  BCS TwoDigits            ; if the player's score is greater than or equal to 10, skip the next part
 
-OneDigit1:
+OneDigit:
   LDA #$20
-  STA $2006
-  LDA #$28
-  STA $2006
+  STA $2006                ; store high byte address to the PPU address register
+  INY                      ; low byte address was pointing towards the tens digit, set it to the ones digit instead
+  STY $2006                ; store low byte address to the PPU address register
 
-  LDA score1
+  TXA
   CLC
-  ADC #$B2
-  STA $2007
+  ADC #$B2                 ; grab tile at address [ZeroTile + player score]
+  STA $2007                ; store that tile in the PPU name table
 
-  JMP Player2DrawScore
+  RTS
 
-TwoDigits1:
-UpdateTensDigit1:
+
+
+TwoDigits:
+TensDigit:
   LDA #$20
   STA $2006
-  LDA #$27
-  STA $2006
+  STY $2006
 
   LDA #$B3                 ; set the tens digit to 1
   STA $2007
-UpdateTensDigitDone1:
+TensDigitDone:
 
-  LDA score1
+  TXA
   SEC
-  SBC #$0A                 ; set the ones digit to [score1 - 10]
+  SBC #$0A                 ; set the ones digit to [score - 10]
   CLC
-  ADC #$B2                 ; add the offset for the tile's location in the PPU's tile memory
+  ADC #$B2                 ; add the offset for the digits's location in the PPU's tile memory
   STA $2007                
 
-
-
-Player2DrawScore:
-  LDA score2
-  CMP #$0A
-  BCS TwoDigits2            ; if the player's score is greater than or equal to 10, skip the next part
-
-OneDigit2:
-  LDA #$20
-  STA $2006
-  LDA #$38
-  STA $2006
-
-  LDA score2
-  CLC
-  ADC #$B2
-  STA $2007
-
-  JSR RestorePPUADDR
-
-  RTS                      ; return
-
-
-
-TwoDigits2:
-UpdateTensDigit2:
-  LDA #$20
-  STA $2006
-  LDA #$37
-  STA $2006
-
-  LDA #$B3                 ; set the tens digit to 1
-  STA $2007
-UpdateTensDigitDone2:
-
-  LDA score2
-  SEC
-  SBC #$0A                 ; set the ones digit to [score2 - 10]
-  CLC
-  ADC #$B2                 ; add the offset for the tile's location in the PPU's tile memory
-  STA $2007                
-
-  JSR RestorePPUADDR
-
+DrawScoreDone:
   RTS                      ; return
 
  
@@ -224,7 +199,7 @@ DisableRendering:
 
 ;;;;;;;;;;;;;;;
 
-; restore the PPU address register ($2006) to its idle address ($0800) in order to render the next frame properly
+; restore the PPU address register (CPU Port $2006) to its idle address (PPU $0800) in order to render the next frame properly
 RestorePPUADDR:
   LDA #$08             
   STA $2006
@@ -650,7 +625,7 @@ CheckCrash:
   CMP nxtSquare2
   BNE Check1
   
-  JSR Crashed              ; if two bikes will occupy the same space next tick, set the round as a draw
+  JSR Crashed              ; if two bikes will occupy the same space next tick, declare a crash and set the round as a draw
 
 Check1:
   CLC
@@ -739,10 +714,10 @@ TickDone:
 ;;;;;;;;;;;;;;;
 
 Crashed:
-  LDA #$50          ; set the wait counter
+  LDA #$50          ; set the post-game wait counter
   STA wait
 
-  LDA #STATECRASH   ; post-game wait, pauses everything to show who crashed.
+  LDA #STATECRASH   ; post-game wait, breifly pauses everything to show who crashed.
   STA gamestate
 
 WhoCrashed:
@@ -751,9 +726,10 @@ Player1Check:
   AND #%00000001
   BEQ Player1CheckDone
 
+Player1Crashed:
   LDA attributes1
   ORA #%00000011
-  STA attributes1   ;set the color of the player who crashed to red
+  STA attributes1   ; set the color of the player who crashed to red
 Player1CheckDone:
 
 Player2Check:
@@ -761,9 +737,10 @@ Player2Check:
   AND #%00000010
   BEQ Player2CheckDone
 
+Player2Crashed:
   LDA attributes2
   ORA #%00000011
-  STA attributes2   ;set the color of the player who crashed to red
+  STA attributes2   ; set the color of the player who crashed to red
 Player2CheckDone:
 
   RTS
@@ -805,249 +782,141 @@ ReadController2Loop:  ; stores the input from controller1 in a variable so it ca
 
 ;;;;;;;;;;;;;;;
 
-Turn1:
-CheckHeld1:
-  LDA heldDir1
-  BEQ CheckAll1               ;; if there was no pressed button from last read (heldDir = 0), read all buttons
+;; stored values for this subroutine:
+;;
+;; A - nextDir/heldDir/buttons
+;; X - nextDir
+;; Y - heldDir
+;; argument1 - buttons
+;; argument2 - currDir         (used in CheckHorz/CheckVerts subroutine)
+;; argument3 - nextDir/heldDir (used for operations on the accumulator)
+
+ReadTurn:
+CheckHeld:
+  TYA                        ;; place heldDirection in the accumulator
+  BEQ CheckAll               ;; if there was no pressed button from last read (heldDir = 0), read all buttons
 
 ;; if a button is held down
 CheckPerpendiculars1:
   AND #%00001100              ;; if the held direction is either up or down
-  BNE HoldingVert1
+  BNE HoldingVert
 
-  LDA heldDir1
+  TYA
   AND #%00000011              ;; if the held direction is either left or right
-  BNE HoldingHorz1
+  BNE HoldingHorz
 
-HoldingVert1:
-  JSR CheckHorz1
-  JMP CheckPerpendicularsDone1
-HoldingHorz1:
-  JSR CheckVert1
-CheckPerpendicularsDone1:
+HoldingVert:
+  JSR CheckHorz               ;; only read horizontal buttons
+  JMP CheckPerpendicularsDone
+HoldingHorz:
+  JSR CheckVert               ;; only read vertical buttons
+CheckPerpendicularsDone:    
  
 
-ReadHeld1: 
-  LDA buttons1
-  AND heldDir1                ;; check if the held button from last contoller read is still being held
-  BNE StillHeld1
+ReadHeld:
+  STY operator                ;; store heldDir into operator
 
-  LDA nextDir1
-  STA heldDir1                ;; if held button is no longer held, set second button (or zero in none) as the held button
-  JMP ReadRightDone1
+  LDA argument1               ;; load buttons
+  AND operator                ;; check if the held button from last contoller read is still being held
+  BNE StillHeld
 
-StillHeld1:
-  LDA nextDir1
-  BNE ReadRightDone1     ;; if a second key was pressed, that takes priority over the held button
+                              ;; if held button is no longer held
+  TXA                         ;; store nextDir to the accumulator
+  TAY                         ;; set second held button (or zero in none) as the held button
+  JMP ReadRightDone
 
-  LDA heldDir1
-  STA nextDir1
-  JMP ReadRightDone1     ;; if the held key is the only key pressed, set that as the next direction
+StillHeld:
+  TXA                         ;; nextDir to register, set zero flag if it is 0
+  BNE HeldDone                ;; if a second key was pressed, that takes priority over the heldDirection
 
+  TYA
+  TAX                         ;; if the held key is the only key pressed, set that as the nextDirection
+HeldDone:
+  RTS                         ;; return from subroutine
 
 
 ;; if no button was held down
-CheckAll1:
-  JSR CheckVert1
-  JSR CheckHorz1
-  LDA nextDir1
-  STA heldDir1                ;; store any key pressed (or zero if none) as the held button
-  JMP ReadRightDone1
+CheckAll:
+  JSR CheckVert
+  JSR CheckHorz
+  TXA
+  TAY                         ;; store the nextDirection as the heldDirection
+CheckAllDone:  
+  RTS                         ;; return from subroutine
+
+;;;;;;;;;;;;;;;
 
 
-CheckVert1:
-ReadUp1:
-  LDA buttons1        ; player 1 - D-Pad Up
+CheckVert:
+ReadUp:
+  LDA argument1       ; D-Pad Up
   AND #UP             ; only look at bit 3
-  BEQ ReadUpDone1     ; branch to ReadUpDone if button is NOT pressed (0)
+  BEQ ReadUpDone      ; branch to ReadUpDone if button is NOT pressed (0)
 
-  LDA currDir1
+  LDA argument2       ; load bike's currentDirection
   CMP #DOWN
-  BEQ ReadUpDone1     ; ignore if moving down, bike cannot make 180 degree turns
+  BEQ ReadUpDone      ; skip if moving down, bike cannot make 180 degree turns
 
   LDA #UP
-  STA nextDir1 
-ReadUpDone1:          ; handling this button is done
+  TAX                 ; store UP as the nextDirection
+ReadUpDone:           ; handling this directional button is done
 
 ReadDown1:
-  LDA buttons1        ; player 1 - D-Pad Down
+  LDA argument1       ; D-Pad Down
   AND #DOWN           ; only look at bit 2
-  BEQ ReadDownDone1   ; branch to ReadDownDone if button is NOT pressed (0)
+  BEQ ReadDownDone    ; branch to ReadDownDone if button is NOT pressed (0)
 
-  LDA currDir1
+  LDA argument2       ; load bike's currentDirection
   CMP #UP
-  BEQ ReadDownDone1   ; ignore if moving up, bike cannot make 180 degree turns
+  BEQ ReadDownDone    ; ignore if moving up, bike cannot make 180 degree turns
 
-  LDA buttons1
+  LDA argument1
   AND #UP
-  BNE NoDirection1    ; if both up and down are held down they cancel out, do not change direction
+  BNE NoDirection     ; if both up and down are held down they cancel out, do not change direction
 
   LDA #DOWN
-  STA nextDir1 
-ReadDownDone1:        ; handling this button is done
+  TAX                 ; store DOWN as the nextDirection
+ReadDownDone:         ; handling this button is done
   RTS
 
-CheckHorz1:
-ReadLeft1:
-  LDA buttons1        ; player 1 - D-Pad Left
+;;
+
+
+CheckHorz:
+ReadLeft:
+  LDA argument1       ; D-Pad Left
   AND #LEFT           ; only look at bit 1
-  BEQ ReadLeftDone1   ; branch to ReadLeftDone if button is NOT pressed (0)
+  BEQ ReadLeftDone    ; branch to ReadLeftDone if button is NOT pressed (0)
   
-  LDA currDir1
+  LDA argument2       ; load bike's currentDirection
   CMP #RIGHT
-  BEQ ReadLeftDone1   ; ignore if moving right, bike cannot make 180 degree turns
+  BEQ ReadLeftDone    ; ignore if moving right, bike cannot make 180 degree turns
 
   LDA #LEFT
-  STA nextDir1
-ReadLeftDone1:        ; handling this button is done
+  TAX                 ; store LEFT as the nextDirection
+ReadLeftDone:         ; handling this button is done
   
-ReadRight1: 
-  LDA buttons1        ; player 1 - D-Pad Right
+ReadRight: 
+  LDA argument1       ; D-Pad Right
   AND #RIGHT          ; only look at bit 0
-  BEQ ReadRightDone1  ; branch to ReadRightDone if button is NOT pressed (0)
+  BEQ ReadRightDone   ; branch to ReadRightDone if button is NOT pressed (0)
 
-  LDA currDir1
+  LDA argument2       ; load bike's currentDirection
   CMP #LEFT
-  BEQ ReadRightDone1  ; ignore if moving right, bike cannot make 180 degree turns
+  BEQ ReadRightDone   ; ignore if moving right, bike cannot make 180 degree turns
 
-  LDA buttons1
+  LDA argument2       ; load bike's currentDirection
   AND #LEFT
-  BNE NoDirection1    ; if both left and right are held down they cancel out, do not change direction
+  BNE NoDirection     ; if both left and right are held down they cancel out, do not change direction
 
   LDA #RIGHT
-  STA nextDir1
-ReadRightDone1:       ; handling this button is done
+  TAX
+ReadRightDone:        ; handling this button is done
   RTS
 
+;;
 
 
-NoDirection1:         ; if two opposing directions are held down, do not change direction
-  LDA #$00
-  STA nextDir1
-
-  RTS
-
-
-;;;;;;;;;;;;;
-
-Turn2:
-CheckHeld2:
-  LDA heldDir2
-  BEQ CheckAll2                ;; if there was no pressed button from last read (heldDir = 0), read all buttons
-
-;; if a button is held down
-CheckPerpendiculars2:
-  AND #%00001100              ;; if the held direction is either up or down
-  BNE HoldingVert2
-
-  LDA heldDir2
-  AND #%00000011              ;; if the held direction is either left or right
-  BNE HoldingHorz2
-
-HoldingVert2:
-  JSR CheckHorz2
-  JMP CheckPerpendicularsDone2
-HoldingHorz2:
-  JSR CheckVert2
-CheckPerpendicularsDone2:
- 
-
-ReadHeld2: 
-  LDA buttons2
-  AND heldDir2                ;; check if the held button from last contoller read is still being held
-  BNE StillHeld2
-
-  LDA nextDir2
-  STA heldDir2                ;; if held button is no longer held, set second button (or zero in none) as the held button
-  JMP ReadRightDone2
-
-StillHeld2:
-  LDA nextDir2
-  BNE ReadRightDone2     ;; if a second key was pressed, that takes priority over the held button
-
-  LDA heldDir2
-  STA nextDir2
-  JMP ReadRightDone2     ;; if the held key is the only key pressed, set that as the next direction
-
-
-
-;; if no button was held down
-CheckAll2:
-  JSR CheckVert2
-  JSR CheckHorz2
-  LDA nextDir2
-  STA heldDir2                ;; store any key pressed (or zero if none) as the held button
-  JMP ReadRightDone2
-
-
-CheckVert2:
-ReadUp2:
-  LDA buttons2        ; player 2 - D-Pad Up
-  AND #UP             ; only look at bit 3
-  BEQ ReadUpDone2     ; branch to ReadUpDone if button is NOT pressed (0)
-
-  LDA currDir2
-  CMP #DOWN
-  BEQ ReadUpDone2     ; ignore if moving down, bike cannot make 180 degree turns
-
-  LDA #UP
-  STA nextDir2 
-ReadUpDone2:          ; handling this button is done
-
-ReadDown2:
-  LDA buttons2        ; player 2 - D-Pad Down
-  AND #DOWN           ; only look at bit 2
-  BEQ ReadDownDone2   ; branch to ReadDownDone if button is NOT pressed (0)
-
-  LDA currDir2
-  CMP #UP
-  BEQ ReadDownDone2   ; ignore if moving up, bike cannot make 180 degree turns
-
-  LDA buttons2
-  AND #UP
-  BNE NoDirection2    ; if both up and down are held down they cancel out, do not change direction
-
-  LDA #DOWN
-  STA nextDir2 
-ReadDownDone2         ; handling this button is done
-  RTS
-
-CheckHorz2:
-ReadLeft2:
-  LDA buttons2        ; player 2 - D-Pad Left
-  AND #LEFT           ; only look at bit 1
-  BEQ ReadLeftDone2   ; branch to ReadLeftDone if button is NOT pressed (0)
-  
-  LDA currDir2
-  CMP #RIGHT
-  BEQ ReadLeftDone2   ; ignore if moving right, bike cannot make 180 degree turns
-
-  LDA #LEFT
-  STA nextDir2
-ReadLeftDone2:        ; handling this button is done
-  
-ReadRight2: 
-  LDA buttons2        ; player 2 - D-Pad Right
-  AND #RIGHT          ; only look at bit 0
-  BEQ ReadRightDone2  ; branch to ReadRightDone if button is NOT pressed (0)
-
-  LDA currDir2
-  CMP #LEFT
-  BEQ ReadRightDone2  ; ignore if moving right, bike cannot make 180 degree turns
-
-  LDA buttons2
-  AND #LEFT
-  BNE NoDirection2    ; if both left and right are held down they cancel out, do not change direction
-
-  LDA #RIGHT
-  STA nextDir2
-ReadRightDone2:        ; handling this button is done
-  RTS
-
-
-
-NoDirection2:
-  LDA #$00
-  STA nextDir2
-
+NoDirection:          ; if two opposing directions are held down, do not change direction
+  LDX #$00
   RTS
