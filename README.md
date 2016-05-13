@@ -35,7 +35,7 @@ Assembled with NESASM3
 
 ## How to play
 
-Each player has to survive by avoiding walls created by the bikes while also diverting the other player into a wall.  Both bikes leave behind a wall as they move across the grid.  Any wall, either created by yourself or your opponent, is lethal. Bikes cannot stop once they start moving.
+Each player has to survive by avoiding walls created by the bikes while also diverting the other player into a wall.  Both bikes leave behind a wall as they move across the grid.  Any wall, either created by yourself or your opponent, is lethal.
 
 ###### Title Screen:
 
@@ -45,11 +45,9 @@ Start: Starts the game
 
 D-Pad: Change directions
 
-When holding down a directional button, the game will remember the first button you held down.  While still holding that direction, you can then tap a button in any perpendicular direction and the game will then take priority with the second pressed button and snap towards the new direction for one square, then returning to the originally held direction.  This is great for performing quick turns when space is limited. 
-
 Before each round starts, the player can preset the direction they start out in.  The last direction button pressed will be the player's starting direction.
 
-You cannot Perform 180 degree turns while moving.  That would destroy the bike anyway.
+You cannot perform 180 degree turns while moving.  That would send you into your own wall anyway.
 
 If both players crash at the same time, no one is awarded a point.
 
