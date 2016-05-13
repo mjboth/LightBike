@@ -1,7 +1,7 @@
-# LightBike
-***
+LightBike
+=====
 
-A simple 2-Player action game for the NES
+A simple 2-Player action game for the Nintendo Entertainment System
 
 
 ## Summary
@@ -17,10 +17,19 @@ First to 15 wins.
 
 Assembled with NESASM3
 
+
+## Files
+
+* **lightbike.nes**   - **Complete Build**, the game ROM, open this in an NES emulator (not included in repo) to play the game.  This is all you need to play.
+* **lightbike.asm**   - **Source Code**, written in MOS 6502 Assembly, main code for the game
+* **subroutines.asm** - **Source Code**, written in MOS 6502 Assembly, contains functions called from lightbike.asm
+* **bike.chr**        - **Binary Code**, the *pattern table*, stores information for drawing sprites and background tiles
+
+
 ## How to open
 
 1. Download an NES emulator of your choice from the web and install it
-2. Download lightbike.nes from this repository
+2. Download **lightbike.nes** from this repository
 3. Using the emulator: open lightbike.nes
 
 
@@ -43,13 +52,6 @@ Before each round starts, the player can preset the direction they start out in.
 You cannot Perform 180 degree turns while moving.  That would destroy the bike anyway.
 
 If both players crash at the same time, no one is awarded a point.
-
-## Files
-
-* **lightbike.nes**   - game ROM, open this in an NES emulator (not included in repo) to play the game.  This is all you need to play.
-* **lightbike.asm**   - **ORIGINAL SOURCE CODE**, written in MOS 6502 Assembly, main code for the game
-* **subroutines.asm** - **ORIGINAL SOURCE CODE**, written in MOS 6502 Assembly, contains functions called from lightbike.asm
-* **bike.chr**        - **ORIGINAL BINARY FILE**, the **pattern table**, stores information for drawing sprites and background tiles
 
 
 ## How it works
